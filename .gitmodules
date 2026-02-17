@@ -1,3 +1,6 @@
 [submodule "electronica_digital/lab_00"]
 	path = electronica_digital/lab_00
 	url = git@personal_github:davidbriceoUN/entrega-lab-00-inducci-n-y-flujo-de-dise-o-digital-grupo-3.git
+[submodule "electronica_digital/entregas_clase_teorica"]
+	path = electronica_digital/entregas_clase_teorica
+	url = git@personal_github:kalixdrake/electronica-digital-juan-calixto.git
