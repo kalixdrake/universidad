@@ -2,8 +2,8 @@
 L = 0.20;           % Lado mínimo de 20cm
 n = 7;              % Número de hojas (n=4 en la figura) 
 v_const = 0.05;      % Velocidad entre 1 y 10 cm/s
-S = 1.00;           % Escala inicial
-beta = deg2rad(0);  % Rotación inicial (+/- 45°)
+S = 1.25;           % Escala inicial
+beta = deg2rad(45);  % Rotación inicial (+/- 45°)
 
 % Definición geométrica para centrar en el origen
 r0 = (L/2) * 0.75;  
@@ -46,7 +46,7 @@ y_traj(end) = y_traj(1);
 %% 3.1 Desplazamiento del Origen (Optimización de Eslabones)
 % Centramos en X=0 y bajamos Y=0.15 para usar brazos más cortos
 X_centro = 0.1;  % m (Centrado en el eje Y)
-Y_centro = 0.12; % m (Cerca de la mesa, pero seguro)
+Y_centro = 0.15; % m (Cerca de la mesa, pero seguro)
 
 % Desplazamos la trayectoria generada
 x_traj_desp = x_traj + X_centro;
@@ -83,7 +83,7 @@ theta1 = zeros(1, num_puntos);
 theta2 = zeros(1, num_puntos);
 
 %% 5. Cinemática Inversa Vectorizada (Corrección a "Codo Arriba")
-l1 = 0.15; % Longitud eslabón 1 reducida
+l1 = 0.20; % Longitud eslabón 1 reducida
 l2 = 0.15; % Longitud eslabón 2 reducida
 
 for i = 1:num_puntos
@@ -223,3 +223,86 @@ set(h_robot, 'XData', [0, x_codo(end), x_efector(end)], 'YData', [0, y_codo(end)
 set(h_rastro, 'XData', x_efector, 'YData', y_efector);
 drawnow;
 disp('Animación finalizada.');
+
+%% 8. Dinámica Inversa y Cálculo de Torques
+% Parámetros de masa (kg)
+m_link1 = 0.700; % Brazo 1 (700g)
+m_link2 = 0.600; % Brazo 2 (600g)
+m_motor2 = 0.300; % Motor de la articulación del codo (300g)
+m_tip = 0.050;   % Carga en el efector final (50g)
+
+g = 9.81; % Aceleración de la gravedad [m/s^2]
+
+% --- AGRUPACIÓN DE MASAS (Centro de Masa e Inercias Equivalentes) ---
+% Eslabón 1 compuesto (Brazo 1 + Motor del Codo en el extremo)
+m1_t = m_link1 + m_motor2;
+% Centro de masa efectivo: (masa1 * dist1 + masa_motor * dist_motor) / masa_total
+lc1_t = (m_link1 * (l1/2) + m_motor2 * l1) / m1_t; 
+I1_link = (1/12) * m_link1 * l1^2; % Inercia de barra delgada
+% Teorema de Steiner para inercia total del eslabón 1 compuesto
+I1_t = I1_link + m_link1 * (lc1_t - l1/2)^2 + m_motor2 * (l1 - lc1_t)^2; 
+
+% Eslabón 2 compuesto (Brazo 2 + Carga en la punta)
+m2_t = m_link2 + m_tip;
+lc2_t = (m_link2 * (l2/2) + m_tip * l2) / m2_t;
+I2_link = (1/12) * m_link2 * l2^2;
+I2_t = I2_link + m_link2 * (lc2_t - l2/2)^2 + m_tip * (l2 - lc2_t)^2;
+
+% Preasignar vectores de Torque
+tau1 = zeros(1, num_puntos);
+tau2 = zeros(1, num_puntos);
+
+% --- BUCLE DE CÁLCULO DE LA DINÁMICA INVERSA (Ecuaciones de Newton-Euler/Lagrange) ---
+for i = 1:num_puntos
+    th1 = theta1(i);
+    th2 = theta2(i);
+    dth1 = dtheta1(i);
+    dth2 = dtheta2(i);
+    ddth1 = ddtheta1(i);
+    ddth2 = ddtheta2(i);
+    
+    % Términos de la Matriz de Inercia M(theta)
+    M11 = m1_t * lc1_t^2 + m2_t * (l1^2 + lc2_t^2 + 2*l1*lc2_t*cos(th2)) + I1_t + I2_t;
+    M12 = m2_t * (lc2_t^2 + l1*lc2_t*cos(th2)) + I2_t;
+    M21 = M12;
+    M22 = m2_t * lc2_t^2 + I2_t;
+    
+    % Términos de Coriolis y Fuerza Centrífuga C(theta, dtheta)
+    h_coriolis = -m2_t * l1 * lc2_t * sin(th2);
+    C1 = h_coriolis * (2 * dth1 * dth2 + dth2^2);
+    C2 = -h_coriolis * dth1^2;
+    
+    % Términos de Gravedad G(theta) - Dado que es un Plano Vertical
+    G1 = (m1_t * lc1_t + m2_t * l1) * g * cos(th1) + m2_t * lc2_t * g * cos(th1 + th2);
+    G2 = m2_t * lc2_t * g * cos(th1 + th2);
+    
+    % Ecuación de estado: Torque = M * aceleración + Coriolis + Gravedad
+    tau1(i) = M11 * ddth1 + M12 * ddth2 + C1 + G1;
+    tau2(i) = M21 * ddth1 + M22 * ddth2 + C2 + G2;
+end
+
+% --- CONVERSIÓN DE UNIDADES A kgf·cm ---
+% 1 Nm equivale aproximadamente a 10.197 kgf·cm
+factor_conv = 100 / 9.81; 
+tau1_kgfcm = tau1 * factor_conv;
+tau2_kgfcm = tau2 * factor_conv;
+
+% Extraer los Torques Máximos Absolutos
+max_tau1 = max(abs(tau1_kgfcm));
+max_tau2 = max(abs(tau2_kgfcm));
+
+% Imprimir los resultados exactos para comprar los motores
+fprintf('\n=== REQUERIMIENTOS DE TORQUE (MÁXIMOS EN kgf·cm) ===\n');
+fprintf('Motor 1 (Articulación Base):\n');
+fprintf('  Torque Teórico Máximo:   %.2f kgf·cm\n', max_tau1);
+fprintf('- - - - - - - - - - - - - - - - - - - - - - - - - - \n');
+fprintf('Motor 2 (Articulación Codo):\n');
+fprintf('  Torque Teórico Máximo:   %.2f kgf·cm\n', max_tau2);
+fprintf('====================================================\n\n');
+
+% --- VISUALIZACIÓN DE LOS TORQUES EN EL TIEMPO ---
+figure(4); clf;
+plot(t_total, tau1_kgfcm, 'b', t_total, tau2_kgfcm, 'r', 'LineWidth', 1.5);
+title('Torques Requeridos en las Articulaciones (Dinámica Inversa)');
+xlabel('Tiempo [s]'); ylabel('Torque [kgf·cm]');
+legend('\tau_1 (Base)', '\tau_2 (Codo)', 'Location', 'best'); grid on;
