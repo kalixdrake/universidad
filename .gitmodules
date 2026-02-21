@@ -4,3 +4,9 @@
 [submodule "electronica_digital/entregas_clase_teorica"]
 	path = electronica_digital/entregas_clase_teorica
 	url = git@github.com:kalixdrake/electronica-digital-juan-calixto.git
+[submodule "electronica_digital/lab01"]
+	path = electronica_digital/lab01
+	url = git@github.com:davidbriceoUN/entrega-lab-01-sistemas-num-ricos-y-se-ales-digitales-grupo-3.git
+[submodule "electronica_digital/lab_01"]
+	path = electronica_digital/lab_01
+	url = git@github.com:davidbriceoUN/entrega-lab-01-sistemas-num-ricos-y-se-ales-digitales-grupo-3.git
