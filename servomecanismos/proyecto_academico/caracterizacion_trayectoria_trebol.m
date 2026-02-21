@@ -1,7 +1,7 @@
 %% Parámetros del Proyecto 
 L = 0.20;           % Lado mínimo de 20cm
 n = 7;              % Número de hojas (n=4 en la figura) 
-v_const = 0.01;      % Velocidad entre 1 y 10 cm/s
+v_const = 0.05;      % Velocidad entre 1 y 10 cm/s
 S = 1.00;           % Escala inicial
 beta = deg2rad(0);  % Rotación inicial (+/- 45°)
 
@@ -43,76 +43,183 @@ y_traj = S * r_t .* sin(phi_t + beta);
 x_traj(end) = x_traj(1);
 y_traj(end) = y_traj(1);
 
-%% 4. Fase de Aproximación 
-% El robot inicia en un punto "recogido" a la izquierda [cite: 20]
-x_inicio = -L/2; y_inicio = 0; 
-x_aprox = linspace(x_inicio, x_traj(1), 50);
-y_aprox = linspace(y_inicio, y_traj(1), 50);
+%% 3.1 Desplazamiento del Origen (Optimización de Eslabones)
+% Centramos en X=0 y bajamos Y=0.15 para usar brazos más cortos
+X_centro = 0.1;  % m (Centrado en el eje Y)
+Y_centro = 0.12; % m (Cerca de la mesa, pero seguro)
 
-%% Visualización
-figure(1); clf; hold on;
-plot(x_aprox, y_aprox, 'r--', 'DisplayName', 'Aproximación');
-plot(x_traj, y_traj, 'b', 'LineWidth', 1.5, 'DisplayName', 'Trébol');
-plot(0, 0, 'kx', 'MarkerSize', 10, 'DisplayName', 'Centro (Origen)');
-axis equal; grid on; legend;
-title(['Trayectoria de Trébol Estilizado (n=' num2str(n) ')']);
+% Desplazamos la trayectoria generada
+x_traj_desp = x_traj + X_centro;
+y_traj_desp = y_traj + Y_centro;
+
+%% 4. Fase de Aproximación (Corregida a Velocidad Constante)
+r_max = L/2; 
+x_inicio = X_centro - r_max; % Inicia a la izquierda del trébol
+y_inicio = Y_centro;                % A la mitad de la altura del trébol
+
+% 1. Calculamos la distancia lineal de la aproximación
+dist_aprox = sqrt((x_traj_desp(1) - x_inicio)^2 + (y_traj_desp(1) - y_inicio)^2);
+
+% 2. Calculamos el tiempo necesario para mantener la misma v_const (0.01 m/s)
+T_aprox = dist_aprox / v_const;
+
+% 3. Generamos el vector de tiempo con el mismo dt de la simulación
+t_aprox = 0:dt:T_aprox;
+
+% 4. Interpolamos linealmente para que los puntos estén separados equitativamente
+x_aprox = interp1([0, T_aprox], [x_inicio, x_traj_desp(1)], t_aprox);
+y_aprox = interp1([0, T_aprox], [y_inicio, y_traj_desp(1)], t_aprox);
+
+% Evitamos duplicar el punto exacto de conexión eliminando el último punto
+x_aprox(end) = [];
+y_aprox(end) = [];
+
+%% Concatenación Total de la Ruta
+x_total = [x_aprox, x_traj_desp];
+y_total = [y_aprox, y_traj_desp];
+num_puntos = length(x_total);
+
+theta1 = zeros(1, num_puntos);
+theta2 = zeros(1, num_puntos);
+
+%% 5. Cinemática Inversa Vectorizada (Corrección a "Codo Arriba")
+l1 = 0.15; % Longitud eslabón 1 reducida
+l2 = 0.15; % Longitud eslabón 2 reducida
+
+for i = 1:num_puntos
+    x = x_total(i);
+    y = y_total(i);
+    
+    % Ley de Cosenos
+    D = (x^2 + y^2 - l1^2 - l2^2) / (2 * l1 * l2);
+    
+    % Pequeña protección contra errores de redondeo de MATLAB en los bordes
+    if D > 1
+        D = 1; 
+    elseif D < -1
+        D = -1; 
+    end
+    
+    % CAMBIO CLAVE: Usamos la raíz NEGATIVA (-sqrt) para forzar Codo Arriba
+    th2 = atan2(-sqrt(1 - D^2), D);  
+    th1 = atan2(y, x) - atan2(l2 * sin(th2), l1 + l2 * cos(th2));
+    
+    theta1(i) = th1;
+    theta2(i) = th2;
+end
+
+%% 6. CORRECCIÓN DE CONTINUIDAD Y DERIVADAS
+theta1 = unwrap(theta1);
+theta2 = unwrap(theta2);
+
+dt = 0.01; % Asegúrate de usar el mismo dt de la generación de la trayectoria
+dtheta1  = gradient(theta1, dt);
+dtheta2  = gradient(theta2, dt);
+ddtheta1 = gradient(dtheta1, dt);
+ddtheta2 = gradient(dtheta2, dt);
+
+% Crear vector de tiempo total para graficar
+t_total = (0:num_puntos-1) * dt;
+
+%% Visualización Completa: Posición, Velocidad y Aceleración
+figure(2); clf;
+
+% Posiciones
+subplot(3,1,1);
+plot(t_total, rad2deg(theta1), 'b', t_total, rad2deg(theta2), 'r', 'LineWidth', 1.2);
+title('Posiciones Angulares (\theta_1 y \theta_2)');
+ylabel('Grados (°)'); legend('\theta_1', '\theta_2', 'Location', 'best'); grid on;
+
+% Velocidades
+subplot(3,1,2);
+plot(t_total, dtheta1, 'b', t_total, dtheta2, 'r', 'LineWidth', 1.2);
+title('Velocidades Angulares (\omega)');
+ylabel('rad/s'); grid on;
+
+% Aceleraciones
+subplot(3,1,3);
+plot(t_total, ddtheta1, 'b', t_total, ddtheta2, 'r', 'LineWidth', 1.2);
+title('Aceleraciones Angulares (\alpha)');
+xlabel('Tiempo [s]'); ylabel('rad/s^2'); grid on;
+
+%% Extracción de Datos para Selección de Motores
+max_vel_1 = max(abs(dtheta1));
+max_vel_2 = max(abs(dtheta2));
+max_accel_1 = max(abs(ddtheta1));
+max_accel_2 = max(abs(ddtheta2));
+
+% Mostrar en consola de MATLAB
+fprintf('\n=== REQUERIMIENTOS CINEMÁTICOS MÁXIMOS ===\n');
+fprintf('Motor 1 (Articulación Base):\n');
+fprintf('  Velocidad Máxima:   %.4f rad/s  (%.2f RPM)\n', max_vel_1, max_vel_1 * 60 / (2*pi));
+fprintf('  Aceleración Máx:    %.4f rad/s^2\n', max_accel_1);
+fprintf('- - - - - - - - - - - - - - - - - - - - - \n');
+fprintf('Motor 2 (Articulación Codo):\n');
+fprintf('  Velocidad Máxima:   %.4f rad/s  (%.2f RPM)\n', max_vel_2, max_vel_2 * 60 / (2*pi));
+fprintf('  Aceleración Máx:    %.4f rad/s^2\n', max_accel_2);
+fprintf('==========================================\n\n');
+
+%% 7. Animación del Robot 2R (Trayectoria Desplazada y Corregida)
+% Calculamos la Cinemática Directa para obtener las posiciones (x, y) 
+% de la articulación (codo) y del efector final en el tiempo.
+x_codo = l1 * cos(theta1);
+y_codo = l1 * sin(theta1);
+
+x_efector = x_codo + l2 * cos(theta1 + theta2);
+y_efector = y_codo + l2 * sin(theta1 + theta2);
+
+% Configuración de la figura
+figure(3); clf; hold on; axis equal;
+grid on;
+title('Animación del Robot');
 xlabel('X [m]'); ylabel('Y [m]');
 
-%% Parámetros Físicos del Robot (en metros)
-l1 = 0.15; % Longitud eslabón 1 [cite: 7]
-l2 = 0.15; % Longitud eslabón 2 [cite: 6]
+% Definir los límites de la gráfica para ver todo el espacio de trabajo
+% Como desplazamos el centro a X=0.25, Y=0.25, ajustamos los límites
+axis([-0.25 0.6 -0.05 0.6]); % X de -0.25 a 0.6, Y de -0.05 a 0.6
 
-% Inicialización de vectores de ángulos
-theta1 = zeros(size(x_traj));
-theta2 = zeros(size(y_traj));
+% 1. Dibujar la "Mesa" (y=0) para verificar visualmente que no la golpea
+plot([-0.25, 0.6], [0, 0], 'k-', 'LineWidth', 3, 'DisplayName', 'Mesa (y=0)');
 
-%% Cálculo de Cinemática Inversa (IK)
-for i = 1:length(x_traj)
-    px = x_traj(i);
-    py = y_traj(i);
+% 2. Dibujar la trayectoria total deseada (Aproximación + Trébol)
+plot(x_total, y_total, 'color', [0.8 0.8 0.8], 'LineWidth', 1.5, 'DisplayName', 'Ruta Deseada');
+
+% Handles para la animación (se actualizarán en el bucle)
+% Línea del robot (Base -> Codo -> Efector)
+h_robot = plot([0, x_codo(1), x_efector(1)], [0, y_codo(1), y_efector(1)], ...
+    '-o', 'LineWidth', 4, 'MarkerSize', 8, 'Color', '#D95319', ...
+    'MarkerFaceColor', '#0072BD', 'DisplayName', 'Eslabones');
+
+% Rastro del efector final
+h_rastro = plot(x_efector(1), y_efector(1), 'b-', 'LineWidth', 2, 'DisplayName', 'Rastro Real');
+legend('Location', 'northwest');
+
+% Preasignar vectores para el rastro
+x_rastro_anim = zeros(1, num_puntos);
+y_rastro_anim = zeros(1, num_puntos);
+
+%% Bucle de Animación
+paso_animacion = 15; % Salto entre frames para que no sea muy lenta
+
+disp('Iniciando animación...');
+for i = 1:paso_animacion:num_puntos
+    % Actualizar datos del rastro
+    x_rastro_anim(1:i) = x_efector(1:i);
+    y_rastro_anim(1:i) = y_efector(1:i);
     
-    % Cálculo de cos(theta2)
-    cos_th2 = (px^2 + py^2 - l1^2 - l2^2) / (2 * l1 * l2);
+    % Actualizar la posición del robot en la figura
+    set(h_robot, 'XData', [0, x_codo(i), x_efector(i)], ...
+                 'YData', [0, y_codo(i), y_efector(i)]);
+                 
+    % Actualizar el rastro del efector final
+    set(h_rastro, 'XData', x_rastro_anim(1:i), ...
+                  'YData', y_rastro_anim(1:i));
     
-    % Verificación de alcance (evitar errores numéricos fuera de [-1, 1])
-    cos_th2 = max(min(cos_th2, 1), -1);
-    
-    % Elegimos "Codo arriba" (positivo) o "Codo abajo" (negativo)
-    % Se recomienda mantener el mismo signo para toda la trayectoria
-    theta2(i) = acos(cos_th2); 
-    
-    % Cálculo de theta1
-    theta1(i) = atan2(py, px) - atan2(l2 * sin(theta2(i)), l1 + l2 * cos(theta2(i)));
+    % Forzar la actualización gráfica
+    drawnow;
 end
-%% 
-
-%% Visualización de los Ángulos de los Motores
-figure(2);
-subplot(2,1,1);
-plot(t, rad2deg(theta1), 'r', 'LineWidth', 1.5);
-title('Ángulo Motor 1 (\theta_1)'); ylabel('Grados [°]'); grid on;
-
-subplot(2,1,2);
-plot(t, rad2deg(theta2), 'b', 'LineWidth', 1.5);
-title('Ángulo Motor 2 (\theta_2)'); ylabel('Grados [°]'); xlabel('Tiempo [s]'); grid on;
-
-%% Simulación del Movimiento del Robot
-figure(3);
-for i = 1:20:length(x_traj) % Dibujar cada 20 pasos para rapidez
-    % Coordenadas de las articulaciones
-    x0 = 0; y0 = 0;
-    x1 = l1 * cos(theta1(i));
-    y1 = l1 * sin(theta1(i));
-    x2 = x_traj(i);
-    y2 = y_traj(i);
-    
-    clf;
-    hold on;
-    plot(x_traj, y_traj, 'k:'); % Trayectoria deseada
-    plot([x0 x1], [y0 y1], 'r-o', 'LineWidth', 2); % Eslabón 1
-    plot([x1 x2], [y1 y2], 'b-o', 'LineWidth', 2); % Eslabón 2
-    axis equal; grid on;
-    axis([-0.3 0.3 -0.1 0.4]);
-    title('Simulación Robot 2R siguiendo Trébol');
-    pause(0.01);
-end
+% Asegurar que dibuje el último punto
+set(h_robot, 'XData', [0, x_codo(end), x_efector(end)], 'YData', [0, y_codo(end), y_efector(end)]);
+set(h_rastro, 'XData', x_efector, 'YData', y_efector);
+drawnow;
+disp('Animación finalizada.');
