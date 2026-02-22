@@ -1,0 +1,308 @@
+%% Parámetros del Proyecto 
+L = 0.20;           % Lado mínimo de 20cm
+n = 7;              % Número de hojas (n=4 en la figura) 
+v_const = 0.1;      % Velocidad entre 1 y 10 cm/s
+S = 1.25;           % Escala inicial
+beta = deg2rad(4);  % Rotación inicial (+/- 45°)
+
+% Definición geométrica para centrar en el origen
+r0 = (L/2) * 0.75;  
+A = (L/2) * 0.25;   % r_max = r0 + A = L/2
+
+%% 1. Generación de la Trayectoria Base (Garantizar Cierre)
+% Usamos una resolución alta de phi para calcular la longitud de arco
+phi_raw = linspace(0, 2*pi, 1000); 
+r_raw = r0 + A*cos(n * phi_raw);
+x_raw = r_raw .* cos(phi_raw);
+y_raw = r_raw .* sin(phi_raw);
+
+%% 2. Parametrización para Velocidad Constante
+% Calculamos la distancia acumulada (arco)
+dx = diff(x_raw); dy = diff(y_raw);
+ds = sqrt(dx.^2 + dy.^2);
+s_acumulada = [0, cumsum(ds)];
+perimetro_total = s_acumulada(end);
+
+% Definimos el tiempo total basado en la velocidad deseada
+T_total = perimetro_total / v_const;
+dt = 0.01; % Paso de tiempo de simulación
+t = 0:dt:T_total;
+
+% Interpolamos para obtener s(t) lineal (velocidad constante)
+s_t = v_const * t; 
+
+% Interpolamos phi para que corresponda a esas distancias s_t
+phi_t = interp1(s_acumulada, phi_raw, s_t, 'pchip', 'extrap');
+
+%% 3. Cálculo de Coordenadas Finales (Centradas en el Origen)
+r_t = r0 + A*cos(n * phi_t);
+x_traj = S * r_t .* cos(phi_t + beta);
+y_traj = S * r_t .* sin(phi_t + beta);
+
+% Asegurar cierre manual del último punto con el primero
+x_traj(end) = x_traj(1);
+y_traj(end) = y_traj(1);
+
+%% 3.1 Desplazamiento del Origen (Optimización de Eslabones)
+% Centramos en X=0 y bajamos Y=0.15 para usar brazos más cortos
+X_centro = 0.1;  
+Y_centro = 0.19; % m (Cerca de la mesa, pero seguro)
+
+% Desplazamos la trayectoria generada
+x_traj_desp = x_traj + X_centro;
+y_traj_desp = y_traj + Y_centro;
+
+%% 4. Fase de Aproximación (Corregida a Velocidad Constante)
+r_max = L/2; 
+x_inicio = X_centro - r_max; % Inicia a la izquierda del trébol
+y_inicio = Y_centro - 0.05;                % A la mitad de la altura del trébol
+
+% 1. Calculamos la distancia lineal de la aproximación
+dist_aprox = sqrt((x_traj_desp(1) - x_inicio)^2 + (y_traj_desp(1) - y_inicio)^2);
+
+% 2. Calculamos el tiempo necesario para mantener la misma v_const (0.01 m/s)
+T_aprox = dist_aprox / v_const;
+
+% 3. Generamos el vector de tiempo con el mismo dt de la simulación
+t_aprox = 0:dt:T_aprox;
+
+% 4. Interpolamos linealmente para que los puntos estén separados equitativamente
+x_aprox = interp1([0, T_aprox], [x_inicio, x_traj_desp(1)], t_aprox);
+y_aprox = interp1([0, T_aprox], [y_inicio, y_traj_desp(1)], t_aprox);
+
+% Evitamos duplicar el punto exacto de conexión eliminando el último punto
+x_aprox(end) = [];
+y_aprox(end) = [];
+
+%% Concatenación Total de la Ruta
+x_total = [x_aprox, x_traj_desp];
+y_total = [y_aprox, y_traj_desp];
+num_puntos = length(x_total);
+
+theta1 = zeros(1, num_puntos);
+theta2 = zeros(1, num_puntos);
+
+%% 5. Cinemática Inversa Vectorizada (Corrección a "Codo Arriba")
+l1 = 0.18; % Longitud eslabón 1 reducida
+l2 = 0.18; % Longitud eslabón 2 reducida
+
+for i = 1:num_puntos
+    x = x_total(i);
+    y = y_total(i);
+    
+    % Ley de Cosenos
+    D = (x^2 + y^2 - l1^2 - l2^2) / (2 * l1 * l2);
+    
+    % Pequeña protección contra errores de redondeo de MATLAB en los bordes
+    if D > 1
+        D = 1; 
+    elseif D < -1
+        D = -1; 
+    end
+    
+    % CAMBIO CLAVE: Usamos la raíz NEGATIVA (-sqrt) para forzar Codo Arriba
+    th2 = atan2(-sqrt(1 - D^2), D);  
+    th1 = atan2(y, x) - atan2(l2 * sin(th2), l1 + l2 * cos(th2));
+    
+    theta1(i) = th1;
+    theta2(i) = th2;
+end
+
+%% 6. CORRECCIÓN DE CONTINUIDAD Y DERIVADAS
+theta1 = unwrap(theta1);
+theta2 = unwrap(theta2);
+
+dt = 0.01; % Asegúrate de usar el mismo dt de la generación de la trayectoria
+dtheta1  = gradient(theta1, dt);
+dtheta2  = gradient(theta2, dt);
+ddtheta1 = gradient(dtheta1, dt);
+ddtheta2 = gradient(dtheta2, dt);
+
+% Crear vector de tiempo total para graficar
+t_total = (0:num_puntos-1) * dt;
+
+%% Visualización Completa: Posición, Velocidad y Aceleración
+figure(2); clf;
+
+% Posiciones
+subplot(3,1,1);
+plot(t_total, rad2deg(theta1), 'b', t_total, rad2deg(theta2), 'r', 'LineWidth', 1.2);
+title('Posiciones Angulares (\theta_1 y \theta_2)');
+ylabel('Grados (°)'); legend('\theta_1', '\theta_2', 'Location', 'best'); grid on;
+
+% Velocidades
+subplot(3,1,2);
+plot(t_total, dtheta1, 'b', t_total, dtheta2, 'r', 'LineWidth', 1.2);
+title('Velocidades Angulares (\omega)');
+ylabel('rad/s'); grid on;
+
+% Aceleraciones
+subplot(3,1,3);
+plot(t_total, ddtheta1, 'b', t_total, ddtheta2, 'r', 'LineWidth', 1.2);
+title('Aceleraciones Angulares (\alpha)');
+xlabel('Tiempo [s]'); ylabel('rad/s^2'); grid on;
+
+%% Extracción de Datos para Selección de Motores
+max_vel_1 = max(abs(dtheta1));
+max_vel_2 = max(abs(dtheta2));
+max_accel_1 = max(abs(ddtheta1));
+max_accel_2 = max(abs(ddtheta2));
+
+% Mostrar en consola de MATLAB
+fprintf('\n=== REQUERIMIENTOS CINEMÁTICOS MÁXIMOS ===\n');
+fprintf('Motor 1 (Articulación Base):\n');
+fprintf('  Velocidad Máxima:   %.4f rad/s  (%.2f RPM)\n', max_vel_1, max_vel_1 * 60 / (2*pi));
+fprintf('  Aceleración Máx:    %.4f rad/s^2\n', max_accel_1);
+fprintf('- - - - - - - - - - - - - - - - - - - - - \n');
+fprintf('Motor 2 (Articulación Codo):\n');
+fprintf('  Velocidad Máxima:   %.4f rad/s  (%.2f RPM)\n', max_vel_2, max_vel_2 * 60 / (2*pi));
+fprintf('  Aceleración Máx:    %.4f rad/s^2\n', max_accel_2);
+fprintf('==========================================\n\n');
+
+%% 7. Animación del Robot 2R (Trayectoria Desplazada y Corregida)
+% Calculamos la Cinemática Directa para obtener las posiciones (x, y) 
+% de la articulación (codo) y del efector final en el tiempo.
+x_codo = l1 * cos(theta1);
+y_codo = l1 * sin(theta1);
+
+x_efector = x_codo + l2 * cos(theta1 + theta2);
+y_efector = y_codo + l2 * sin(theta1 + theta2);
+
+% Configuración de la figura
+figure(3); clf; hold on; axis equal;
+grid on;
+title('Animación del Robot');
+xlabel('X [m]'); ylabel('Y [m]');
+
+% Definir los límites de la gráfica para ver todo el espacio de trabajo
+% Como desplazamos el centro a X=0.25, Y=0.25, ajustamos los límites
+axis([-0.25 0.6 -0.05 0.6]); % X de -0.25 a 0.6, Y de -0.05 a 0.6
+
+% 1. Dibujar la "Mesa" (y=0) para verificar visualmente que no la golpea
+plot([-0.25, 0.6], [0, 0], 'k-', 'LineWidth', 3, 'DisplayName', 'Mesa (y=0)');
+
+% 2. Dibujar la trayectoria total deseada (Aproximación + Trébol)
+plot(x_total, y_total, 'color', [0.8 0.8 0.8], 'LineWidth', 1.5, 'DisplayName', 'Ruta Deseada');
+
+% Handles para la animación (se actualizarán en el bucle)
+% Línea del robot (Base -> Codo -> Efector)
+h_robot = plot([0, x_codo(1), x_efector(1)], [0, y_codo(1), y_efector(1)], ...
+    '-o', 'LineWidth', 4, 'MarkerSize', 8, 'Color', '#D95319', ...
+    'MarkerFaceColor', '#0072BD', 'DisplayName', 'Eslabones');
+
+% Rastro del efector final
+h_rastro = plot(x_efector(1), y_efector(1), 'b-', 'LineWidth', 2, 'DisplayName', 'Rastro Real');
+legend('Location', 'northwest');
+
+% Preasignar vectores para el rastro
+x_rastro_anim = zeros(1, num_puntos);
+y_rastro_anim = zeros(1, num_puntos);
+
+%% Bucle de Animación
+paso_animacion = 15; % Salto entre frames para que no sea muy lenta
+
+disp('Iniciando animación...');
+for i = 1:paso_animacion:num_puntos
+    % Actualizar datos del rastro
+    x_rastro_anim(1:i) = x_efector(1:i);
+    y_rastro_anim(1:i) = y_efector(1:i);
+    
+    % Actualizar la posición del robot en la figura
+    set(h_robot, 'XData', [0, x_codo(i), x_efector(i)], ...
+                 'YData', [0, y_codo(i), y_efector(i)]);
+                 
+    % Actualizar el rastro del efector final
+    set(h_rastro, 'XData', x_rastro_anim(1:i), ...
+                  'YData', y_rastro_anim(1:i));
+    
+    % Forzar la actualización gráfica
+    drawnow;
+end
+% Asegurar que dibuje el último punto
+set(h_robot, 'XData', [0, x_codo(end), x_efector(end)], 'YData', [0, y_codo(end), y_efector(end)]);
+set(h_rastro, 'XData', x_efector, 'YData', y_efector);
+drawnow;
+disp('Animación finalizada.');
+
+%% 8. Dinámica Inversa y Cálculo de Torques
+% Parámetros de masa (kg)
+m_link1 = 0.700; % Brazo 1 (700g)
+m_link2 = 0.600; % Brazo 2 (600g)
+m_motor2 = 0.300; % Motor de la articulación del codo (300g)
+m_tip = 0.050;   % Carga en el efector final (50g)
+
+g = 9.81; % Aceleración de la gravedad [m/s^2]
+
+% --- AGRUPACIÓN DE MASAS (Centro de Masa e Inercias Equivalentes) ---
+% Eslabón 1 compuesto (Brazo 1 + Motor del Codo en el extremo)
+m1_t = m_link1 + m_motor2;
+% Centro de masa efectivo: (masa1 * dist1 + masa_motor * dist_motor) / masa_total
+lc1_t = (m_link1 * (l1/2) + m_motor2 * l1) / m1_t; 
+I1_link = (1/12) * m_link1 * l1^2; % Inercia de barra delgada
+% Teorema de Steiner para inercia total del eslabón 1 compuesto
+I1_t = I1_link + m_link1 * (lc1_t - l1/2)^2 + m_motor2 * (l1 - lc1_t)^2; 
+
+% Eslabón 2 compuesto (Brazo 2 + Carga en la punta)
+m2_t = m_link2 + m_tip;
+lc2_t = (m_link2 * (l2/2) + m_tip * l2) / m2_t;
+I2_link = (1/12) * m_link2 * l2^2;
+I2_t = I2_link + m_link2 * (lc2_t - l2/2)^2 + m_tip * (l2 - lc2_t)^2;
+
+% Preasignar vectores de Torque
+tau1 = zeros(1, num_puntos);
+tau2 = zeros(1, num_puntos);
+
+% --- BUCLE DE CÁLCULO DE LA DINÁMICA INVERSA (Ecuaciones de Newton-Euler/Lagrange) ---
+for i = 1:num_puntos
+    th1 = theta1(i);
+    th2 = theta2(i);
+    dth1 = dtheta1(i);
+    dth2 = dtheta2(i);
+    ddth1 = ddtheta1(i);
+    ddth2 = ddtheta2(i);
+    
+    % Términos de la Matriz de Inercia M(theta)
+    M11 = m1_t * lc1_t^2 + m2_t * (l1^2 + lc2_t^2 + 2*l1*lc2_t*cos(th2)) + I1_t + I2_t;
+    M12 = m2_t * (lc2_t^2 + l1*lc2_t*cos(th2)) + I2_t;
+    M21 = M12;
+    M22 = m2_t * lc2_t^2 + I2_t;
+    
+    % Términos de Coriolis y Fuerza Centrífuga C(theta, dtheta)
+    h_coriolis = -m2_t * l1 * lc2_t * sin(th2);
+    C1 = h_coriolis * (2 * dth1 * dth2 + dth2^2);
+    C2 = -h_coriolis * dth1^2;
+    
+    % Términos de Gravedad G(theta) - Dado que es un Plano Vertical
+    G1 = (m1_t * lc1_t + m2_t * l1) * g * cos(th1) + m2_t * lc2_t * g * cos(th1 + th2);
+    G2 = m2_t * lc2_t * g * cos(th1 + th2);
+    
+    % Ecuación de estado: Torque = M * aceleración + Coriolis + Gravedad
+    tau1(i) = M11 * ddth1 + M12 * ddth2 + C1 + G1;
+    tau2(i) = M21 * ddth1 + M22 * ddth2 + C2 + G2;
+end
+
+% --- CONVERSIÓN DE UNIDADES A kgf·cm ---
+% 1 Nm equivale aproximadamente a 10.197 kgf·cm
+factor_conv = 100 / 9.81; 
+tau1_kgfcm = tau1 * factor_conv;
+tau2_kgfcm = tau2 * factor_conv;
+
+% Extraer los Torques Máximos Absolutos
+max_tau1 = max(abs(tau1_kgfcm));
+max_tau2 = max(abs(tau2_kgfcm));
+
+% Imprimir los resultados exactos para comprar los motores
+fprintf('\n=== REQUERIMIENTOS DE TORQUE (MÁXIMOS EN kgf·cm) ===\n');
+fprintf('Motor 1 (Articulación Base):\n');
+fprintf('  Torque Teórico Máximo:   %.2f kgf·cm\n', max_tau1);
+fprintf('- - - - - - - - - - - - - - - - - - - - - - - - - - \n');
+fprintf('Motor 2 (Articulación Codo):\n');
+fprintf('  Torque Teórico Máximo:   %.2f kgf·cm\n', max_tau2);
+fprintf('====================================================\n\n');
+
+% --- VISUALIZACIÓN DE LOS TORQUES EN EL TIEMPO ---
+figure(4); clf;
+plot(t_total, tau1_kgfcm, 'b', t_total, tau2_kgfcm, 'r', 'LineWidth', 1.5);
+title('Torques Requeridos en las Articulaciones (Dinámica Inversa)');
+xlabel('Tiempo [s]'); ylabel('Torque [kgf·cm]');
+legend('\tau_1 (Base)', '\tau_2 (Codo)', 'Location', 'best'); grid on;
