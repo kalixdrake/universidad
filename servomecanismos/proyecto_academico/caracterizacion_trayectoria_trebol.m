@@ -218,27 +218,24 @@ disp('Proceso finalizado.');
 disp('Iniciando análisis del Caso Crítico. Esto puede tardar unos segundos...');
 
 % 1. Definir los vectores de prueba (resolución ajustable)
-vec_S = linspace(0.75, 1.25, 10);        % 10 escalas
-vec_n = 4:7;                            % 4 tipos de trébol
-vec_v = linspace(0.01, 0.1, 10);         % 10 velocidades
-vec_beta = deg2rad(linspace(-45, 45, 90)); % 90 rotaciones
+vec_S = linspace(0.75, 1.25, 5);        % 10 escalas
+vec_n = 4:7;                             % 4 tipos de trébol
+vec_v = linspace(0.01, 0.05, 10);         % 10 velocidades
+vec_beta = deg2rad(linspace(-45, 45, 45)); % 180 rotaciones
 
 % 2. Variables para rastrear los máximos históricos
 max_global_tau1 = 0; max_global_tau2 = 0;
 max_global_acc1 = 0; max_global_acc2 = 0;
+max_global_vel1 = 0; max_global_vel2 = 0; % NUEVO: Rastreadores de velocidad máxima
 params_criticos = struct('S', 0, 'n', 0, 'v', 0, 'beta', 0);
-
-total_iter = length(vec_S) * length(vec_n) * length(vec_v) * length(vec_beta);
-iter_actual = 0;
 
 for S_i = vec_S
     for n_i = vec_n
         for v_i = vec_v
             for beta_i = vec_beta
-                iter_actual = iter_actual + 1;
                 
                 % --- A. Generación de Trayectoria Rápida ---
-                phi_raw = linspace(0, 2*pi, 500); % Menos puntos para iterar rápido
+                phi_raw = linspace(0, 2*pi, 500); 
                 r_raw = r0 + A*cos(n_i * phi_raw);
                 x_raw = r_raw .* cos(phi_raw);
                 y_raw = r_raw .* sin(phi_raw);
@@ -261,7 +258,7 @@ for S_i = vec_S
                 % --- B. Comprobación de Espacio de Trabajo ---
                 D_test = (x_traj.^2 + y_traj.^2 - l1^2 - l2^2) / (2 * l1 * l2);
                 if any(D_test > 1) || any(D_test < -1)
-                    continue; % Si la trayectoria sale del alcance, la saltamos
+                    continue; 
                 end
                 
                 % --- C. Cinemática Inversa ---
@@ -301,7 +298,14 @@ for S_i = vec_S
                 % --- F. Evaluar y Actualizar Máximos ---
                 max_t1_actual = max(abs(tau1_kgfcm_iter));
                 max_t2_actual = max(abs(tau2_kgfcm_iter));
+                max_v1_actual = max(abs(d1_iter)); % Máxima velocidad actual M1
+                max_v2_actual = max(abs(d2_iter)); % Máxima velocidad actual M2
                 
+                % Actualizar picos absolutos de velocidad de forma independiente
+                max_global_vel1 = max(max_global_vel1, max_v1_actual);
+                max_global_vel2 = max(max_global_vel2, max_v2_actual);
+                
+                % Actualizar configuración crítica basada en el torque
                 if max_t1_actual > max_global_tau1 || max_t2_actual > max_global_tau2
                     max_global_tau1 = max(max_global_tau1, max_t1_actual);
                     max_global_tau2 = max(max_global_tau2, max_t2_actual);
@@ -318,23 +322,32 @@ for S_i = vec_S
     end
 end
 
-%% 13. REPORTE DEL CASO CRÍTICO
+%% 13. REPORTE DEL CASO CRÍTICO Y REQUERIMIENTOS
+% Conversión de rad/s a RPM
+rpm_m1 = max_global_vel1 * (60 / (2*pi));
+rpm_m2 = max_global_vel2 * (60 / (2*pi));
+
 fprintf('\n=======================================================\n');
 fprintf('   REPORTE DE DIMENSIONAMIENTO: CASO CRÍTICO ABSOLUTO\n');
 fprintf('=======================================================\n');
-fprintf('Configuración más exigente encontrada:\n');
+fprintf('Configuración que genera el mayor esfuerzo:\n');
 fprintf('  - Escala (S): %.2f\n', params_criticos.S);
 fprintf('  - Número de Hojas (n): %d\n', params_criticos.n);
 fprintf('  - Velocidad (v): %.3f m/s\n', params_criticos.v);
 fprintf('  - Rotación Inicial: %.1f°\n\n', params_criticos.beta);
 
 fprintf('ESPECIFICACIONES MÍNIMAS PARA COMPRA DE MOTORES:\n');
+fprintf('*(Incluye picos absolutos de todo el barrido de pruebas)*\n\n');
+
 fprintf('  MOTOR 1 (BASE):\n');
+fprintf('    Velocidad Pico:   %.2f RPM  (%.2f rad/s)\n', rpm_m1, max_global_vel1);
 fprintf('    Aceleración Pico: %.2f rad/s^2\n', max_global_acc1);
 fprintf('    Torque Pico:      %.2f kgf·cm\n\n', max_global_tau1);
 
 fprintf('  MOTOR 2 (CODO):\n');
+fprintf('    Velocidad Pico:   %.2f RPM  (%.2f rad/s)\n', rpm_m2, max_global_vel2);
 fprintf('    Aceleración Pico: %.2f rad/s^2\n', max_global_acc2);
 fprintf('    Torque Pico:      %.2f kgf·cm\n', max_global_tau2);
 fprintf('=======================================================\n\n');
-disp('Nota: Es recomendable añadir un factor de seguridad del 20% al 30% al torque pico al elegir el motor.');
+disp('Nota 1: El motor seleccionado debe ser capaz de entregar la "Velocidad Pico" y el "Torque Pico" simultáneamente sin perder pasos o estancarse.');
+disp('Nota 2: Aplica un margen de seguridad mecánico del 25% a estos valores al revisar los datasheets.');
