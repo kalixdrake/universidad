@@ -1,0 +1,6 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{p}{[}\PYG{n}{bz\PYGZus{}lp}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{az\PYGZus{}lp}\PYG{p}{]}\PYG{+w}{     }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{bilinear}\PYG{p}{(}\PYG{n}{b\PYGZus{}lp\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{a\PYGZus{}lp\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{Fs}\PYG{p}{);}
+\PYG{p}{[}\PYG{n}{bz\PYGZus{}bp1}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{az\PYGZus{}bp1}\PYG{p}{]}\PYG{+w}{   }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{bilinear}\PYG{p}{(}\PYG{n}{b\PYGZus{}bp1\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{a\PYGZus{}bp1\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{Fs}\PYG{p}{);}
+\PYG{p}{[}\PYG{n}{bz\PYGZus{}bp2}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{az\PYGZus{}bp2}\PYG{p}{]}\PYG{+w}{   }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{bilinear}\PYG{p}{(}\PYG{n}{b\PYGZus{}bp2\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{a\PYGZus{}bp2\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{Fs}\PYG{p}{);}
+\PYG{p}{[}\PYG{n}{bz\PYGZus{}hp}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{az\PYGZus{}hp}\PYG{p}{]}\PYG{+w}{     }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{bilinear}\PYG{p}{(}\PYG{n}{b\PYGZus{}hp\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{a\PYGZus{}hp\PYGZus{}a}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{Fs}\PYG{p}{);}
+\end{Verbatim}

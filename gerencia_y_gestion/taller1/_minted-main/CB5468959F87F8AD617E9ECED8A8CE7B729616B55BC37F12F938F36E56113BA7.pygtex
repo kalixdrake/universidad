@@ -1,0 +1,9 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{nPB}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n+nb}{max}\PYG{p}{(}\PYG{n}{n2}\PYG{p}{,}\PYG{n}{n3}\PYG{p}{);}\PYG{+w}{ }\PYG{c}{\PYGZpc{} mismo orden para pasabanda}
+\PYG{n}{nEXT}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n+nb}{max}\PYG{p}{(}\PYG{n}{n1}\PYG{p}{,}\PYG{n}{n4}\PYG{p}{);}\PYG{+w}{ }\PYG{c}{\PYGZpc{} mismo orden para extremos}
+
+\PYG{p}{[}\PYG{n}{b1}\PYG{p}{,}\PYG{n}{a1}\PYG{p}{]}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{cheby1}\PYG{p}{(}\PYG{n}{nEXT}\PYG{p}{,}\PYG{n}{Rp}\PYG{p}{,}\PYG{n}{Wn1}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}low\PYGZsq{}}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}s\PYGZsq{}}\PYG{p}{);}
+\PYG{p}{[}\PYG{n}{b2}\PYG{p}{,}\PYG{n}{a2}\PYG{p}{]}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{cheby1}\PYG{p}{(}\PYG{n}{nPB}\PYG{p}{,}\PYG{n}{Rp}\PYG{p}{,}\PYG{n}{Wn2}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}bandpass\PYGZsq{}}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}s\PYGZsq{}}\PYG{p}{);}
+\PYG{p}{[}\PYG{n}{b3}\PYG{p}{,}\PYG{n}{a3}\PYG{p}{]}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{cheby1}\PYG{p}{(}\PYG{n}{nPB}\PYG{p}{,}\PYG{n}{Rp}\PYG{p}{,}\PYG{n}{Wn3}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}bandpass\PYGZsq{}}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}s\PYGZsq{}}\PYG{p}{);}
+\PYG{p}{[}\PYG{n}{b4}\PYG{p}{,}\PYG{n}{a4}\PYG{p}{]}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{cheby1}\PYG{p}{(}\PYG{n}{nEXT}\PYG{p}{,}\PYG{n}{Rp}\PYG{p}{,}\PYG{n}{Wn4}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}high\PYGZsq{}}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}s\PYGZsq{}}\PYG{p}{);}
+\end{Verbatim}

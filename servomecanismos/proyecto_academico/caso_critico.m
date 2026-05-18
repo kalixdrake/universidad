@@ -5,7 +5,7 @@ disp('Iniciando análisis del Caso Crítico. Esto puede tardar unos segundos...'
 % 1. Definir los vectores de prueba (resolución ajustable)
 vec_S = linspace(0.75, 1.25, 5);        % 10 escalas
 vec_n = 4:7;                             % 4 tipos de trébol
-vec_v = linspace(0.01, 0.05, 10);         % 10 velocidades
+vec_v = linspace(0.01, 0.1, 10);         % 10 velocidades
 vec_beta = deg2rad(linspace(-45, 45, 45)); % 180 rotaciones
 
 % 2. Variables para rastrear los máximos históricos
@@ -40,16 +40,71 @@ for S_i = vec_S
                 x_traj = S_i * r_t .* cos(phi_t + beta_i) + X_centro;
                 y_traj = S_i * r_t .* sin(phi_t + beta_i) + Y_centro;
                 
+                % --- A.2 Home, Ajuste de Tangente y Aproximación Bezier ---
+                th1_home = pi/2;            
+                th2_home = -pi;             
+                x_inicio = l1 * cos(th1_home) + l2 * cos(th1_home + th2_home);
+                y_inicio = l1 * sin(th1_home) + l2 * sin(th1_home + th2_home);
+
+                dx_traj = gradient(x_traj); dy_traj = gradient(y_traj);
+                norm_traj = sqrt(dx_traj.^2 + dy_traj.^2);
+                tx = dx_traj ./ norm_traj; ty = dy_traj ./ norm_traj;
+                
+                hx = x_traj - x_inicio; hy = y_traj - y_inicio;
+                norm_h = sqrt(hx.^2 + hy.^2); 
+                hx = hx ./ norm_h; hy = hy ./ norm_h;
+                
+                alineacion = hx .* tx + hy .* ty;
+                [~, idx_tangente] = max(alineacion); 
+                
+                x_temp = x_traj(1:end-1); y_temp = y_traj(1:end-1);
+                x_traj_opt = [x_temp(idx_tangente:end), x_temp(1:idx_tangente-1)];
+                y_traj_opt = [y_temp(idx_tangente:end), y_temp(1:idx_tangente-1)];
+                
+                x_traj_desp = [x_traj_opt, x_traj_opt(1)];
+                y_traj_desp = [y_traj_opt, y_traj_opt(1)];
+
+                dist_aprox = sqrt((x_traj_desp(1) - x_inicio)^2 + (y_traj_desp(1) - y_inicio)^2);
+                P0x = x_inicio;       P0y = y_inicio;
+                P3x = x_traj_desp(1); P3y = y_traj_desp(1);
+                
+                dx_llegada = x_traj_desp(2) - x_traj_desp(1);
+                dy_llegada = y_traj_desp(2) - y_traj_desp(1);
+                norm_llegada = sqrt(dx_llegada^2 + dy_llegada^2);
+                tx_in = dx_llegada / norm_llegada; ty_in = dy_llegada / norm_llegada;
+                
+                L_ctrl = dist_aprox * 0.4;
+                P2x = P3x - L_ctrl * tx_in; P2y = P3y - L_ctrl * ty_in;
+                P1x = P0x + L_ctrl * 1.5;   P1y = P0y + L_ctrl * 0.5;
+                
+                T_aprox = (6 * L_ctrl) / v_i; 
+                t_aprox = 0:dt_sim:T_aprox;
+                tau = (t_aprox / T_aprox).^2; 
+                
+                x_aprox = (1-tau).^3 * P0x + 3*(1-tau).^2.*tau * P1x + 3*(1-tau).*tau.^2 * P2x + tau.^3 * P3x;
+                y_aprox = (1-tau).^3 * P0y + 3*(1-tau).^2.*tau * P1y + 3*(1-tau).*tau.^2 * P2y + tau.^3 * P3y;
+                x_aprox(end) = []; y_aprox(end) = [];
+                
+                x_total_iter = [x_aprox, x_traj_desp];
+                y_total_iter = [y_aprox, y_traj_desp];
+                
                 % --- B. Comprobación de Espacio de Trabajo ---
-                D_test = (x_traj.^2 + y_traj.^2 - l1^2 - l2^2) / (2 * l1 * l2);
+                D_test = (x_total_iter.^2 + y_total_iter.^2 - l1^2 - l2^2) / (2 * l1 * l2);
                 if any(D_test > 1) || any(D_test < -1)
                     continue; 
                 end
                 
                 % --- C. Cinemática Inversa ---
-                th2_iter = atan2(-sqrt(1 - D_test.^2), D_test);  
-                th1_iter = atan2(y_traj, x_traj) - atan2(l2 * sin(th2_iter), l1 + l2 * cos(th2_iter));
-                
+                num_p_iter = length(x_total_iter);
+                th1_iter = zeros(1, num_p_iter); th2_iter = zeros(1, num_p_iter);
+                for i_k = 1:num_p_iter
+                    if i_k == 1
+                        th1_iter(i_k) = th1_home; th2_iter(i_k) = th2_home;
+                    else
+                        th2_iter(i_k) = atan2(-sqrt(1 - D_test(i_k)^2), D_test(i_k));  
+                        th1_iter(i_k) = atan2(y_total_iter(i_k), x_total_iter(i_k)) - atan2(l2 * sin(th2_iter(i_k)), l1 + l2 * cos(th2_iter(i_k)));
+                    end
+                end
                 th1_iter = unwrap(th1_iter); th2_iter = unwrap(th2_iter);
                 
                 % --- D. Filtrado de Velocidad y Aceleración ---
@@ -109,30 +164,30 @@ end
 
 %% 13. REPORTE DEL CASO CRÍTICO Y REQUERIMIENTOS
 % Conversión de rad/s a RPM
-%rpm_m1 = max_global_vel1 * (60 / (2*pi));
-%rpm_m2 = max_global_vel2 * (60 / (2*pi));
+rpm_m1 = max_global_vel1 * (60 / (2*pi));
+rpm_m2 = max_global_vel2 * (60 / (2*pi));
 
-%fprintf('\n=======================================================\n');
-%fprintf('   REPORTE DE DIMENSIONAMIENTO: CASO CRÍTICO ABSOLUTO\n');
-%fprintf('=======================================================\n');
-%fprintf('Configuración que genera el mayor esfuerzo:\n');
-%fprintf('  - Escala (S): %.2f\n', params_criticos.S);
-%fprintf('  - Número de Hojas (n): %d\n', params_criticos.n);
-%fprintf('  - Velocidad (v): %.3f m/s\n', params_criticos.v);
-%fprintf('  - Rotación Inicial: %.1f°\n\n', params_criticos.beta);
+fprintf('\n=======================================================\n');
+fprintf('   REPORTE DE DIMENSIONAMIENTO: CASO CRÍTICO ABSOLUTO\n');
+fprintf('=======================================================\n');
+fprintf('Configuración que genera el mayor esfuerzo:\n');
+fprintf('  - Escala (S): %.2f\n', params_criticos.S);
+fprintf('  - Número de Hojas (n): %d\n', params_criticos.n);
+fprintf('  - Velocidad (v): %.3f m/s\n', params_criticos.v);
+fprintf('  - Rotación Inicial: %.1f°\n\n', params_criticos.beta);
 
-%fprintf('ESPECIFICACIONES MÍNIMAS PARA COMPRA DE MOTORES:\n');
-%fprintf('*(Incluye picos absolutos de todo el barrido de pruebas)*\n\n');
+fprintf('ESPECIFICACIONES MÍNIMAS PARA COMPRA DE MOTORES:\n');
+fprintf('*(Incluye picos absolutos de todo el barrido de pruebas (Aproximación + Trayectoria))*\n\n');
 
-%fprintf('  MOTOR 1 (BASE):\n');
-%fprintf('    Velocidad Pico:   %.2f RPM  (%.2f rad/s)\n', rpm_m1, max_global_vel1);
-%fprintf('    Aceleración Pico: %.2f rad/s^2\n', max_global_acc1);
-%fprintf('    Torque Pico:      %.2f kgf·cm\n\n', max_global_tau1);
+fprintf('  MOTOR 1 (BASE):\n');
+fprintf('    Velocidad Pico:   %.2f RPM  (%.2f rad/s)\n', rpm_m1, max_global_vel1);
+fprintf('    Aceleración Pico: %.2f rad/s^2\n', max_global_acc1);
+fprintf('    Torque Pico:      %.2f kgf·cm\n\n', max_global_tau1);
 
-%fprintf('  MOTOR 2 (CODO):\n');
-%fprintf('    Velocidad Pico:   %.2f RPM  (%.2f rad/s)\n', rpm_m2, max_global_vel2);
-%fprintf('    Aceleración Pico: %.2f rad/s^2\n', max_global_acc2);
-%fprintf('    Torque Pico:      %.2f kgf·cm\n', max_global_tau2);
-%fprintf('=======================================================\n\n');
-%disp('Nota 1: El motor seleccionado debe ser capaz de entregar la "Velocidad Pico" y el "Torque Pico" simultáneamente sin perder pasos o estancarse.');
-%disp('Nota 2: Aplica un margen de seguridad mecánico del 25% a estos valores al revisar los datasheets.');
+fprintf('  MOTOR 2 (CODO):\n');
+fprintf('    Velocidad Pico:   %.2f RPM  (%.2f rad/s)\n', rpm_m2, max_global_vel2);
+fprintf('    Aceleración Pico: %.2f rad/s^2\n', max_global_acc2);
+fprintf('    Torque Pico:      %.2f kgf·cm\n', max_global_tau2);
+fprintf('=======================================================\n\n');
+disp('Nota 1: El motor seleccionado debe ser capaz de entregar la "Velocidad Pico" y el "Torque Pico" simultáneamente sin perder pasos o estancarse.');
+disp('Nota 2: Aplica un margen de seguridad mecánico del 25% a estos valores al revisar los datasheets.');

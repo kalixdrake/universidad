@@ -1,0 +1,153 @@
+% =========================================================================
+% Taller Señales y Sistemas II - Punto 4: Detector y Codificador
+% =========================================================================
+clear; clc; close all;
+
+%% 1. Definición de Parámetros para los filtros
+Fs = 75000; 
+Ts = 1/Fs;
+
+f1 = 10700; 
+f2 = 11900; 
+f3 = 13100; 
+f4 = 14300; 
+
+% --- Filtros Analógicos (Punto 1 y 2) ---
+Rp = 3;  
+As = 15; 
+
+w1 = 2*pi*f1; w2 = 2*pi*f2; w3 = 2*pi*f3; w4 = 2*pi*f4;
+wc12 = 2*pi*sqrt(f1 * f2);
+wc23 = 2*pi*sqrt(f2 * f3);
+wc34 = 2*pi*sqrt(f3 * f4);
+
+[n_lp, Wn_lp] = cheb1ord(wc12, w4, Rp, As, 's');
+[n_bp1, Wn_bp1] = cheb1ord([wc12, wc23], [w1, w3], Rp, As, 's');
+[n_bp2, Wn_bp2] = cheb1ord([wc23, wc34], [w2, w4], Rp, As, 's');
+[n_hp, Wn_hp] = cheb1ord(wc34, w1, Rp, As, 's');
+
+orden_bp = max(n_bp1, n_bp2);
+orden_lh = max(n_lp, n_hp);
+
+[b_lp_a, a_lp_a] = cheby1(orden_lh, Rp, Wn_lp, 'low', 's');
+[b_bp1_a, a_bp1_a] = cheby1(orden_bp, Rp, Wn_bp1, 'bandpass', 's');
+[b_bp2_a, a_bp2_a] = cheby1(orden_bp, Rp, Wn_bp2, 'bandpass', 's');
+[b_hp_a, a_hp_a] = cheby1(orden_lh, Rp, Wn_hp, 'high', 's');
+
+% --- Filtros Digitales IIR (Transformación Bilineal - Punto 2) ---
+[bz_lp, az_lp]     = bilinear(b_lp_a, a_lp_a, Fs);
+[bz_bp1, az_bp1]   = bilinear(b_bp1_a, a_bp1_a, Fs);
+[bz_bp2, az_bp2]   = bilinear(b_bp2_a, a_bp2_a, Fs);
+[bz_hp, az_hp]     = bilinear(b_hp_a, a_hp_a, Fs);
+
+% --- Filtros FIR (Punto 3) ---
+N_fir = 200; 
+W1_fir = 11300/(Fs/2);
+W2_fir = 12500/(Fs/2);
+W3_fir = 13700/(Fs/2);
+
+b_fir_lp  = fir1(N_fir, W1_fir, 'low', hamming(N_fir+1));
+b_fir_bp1 = fir1(N_fir, [W1_fir W2_fir], 'bandpass', hamming(N_fir+1));
+b_fir_bp2 = fir1(N_fir, [W2_fir W3_fir], 'bandpass', hamming(N_fir+1));
+b_fir_hp  = fir1(N_fir, W3_fir, 'high', hamming(N_fir+1));
+
+% --- Sistemas Continuos (Analógicos) ---
+sys_lp  = tf(b_lp_a, a_lp_a);
+sys_bp1 = tf(b_bp1_a, a_bp1_a);
+sys_bp2 = tf(b_bp2_a, a_bp2_a);
+sys_hp  = tf(b_hp_a, a_hp_a);
+
+
+%% 3. Procesamiento de las Señales de prueba
+% Profe, puede añadir otro archivo dentro de "archivos prueba" si quie
+archivos_prueba = {'Prueba01.mat', 'Prueba10.mat', 'Prueba11.mat'};
+tipos_filtro = {'Analogico', 'IIR', 'FIR'};
+
+for k = 1:length(archivos_prueba)
+    % Cargar señal
+    archivo = archivos_prueba{k};
+    load(archivo); 
+    % Asegurarnos de que la variable sea un vector fila o columna
+    if exist('Out', 'var')
+        x = Out;
+    elseif exist('SenalP21', 'var')
+        x = SenalP21;
+    else
+        % Si tiene otro nombre, por precaución
+        vars = whos;
+        x = eval(vars(1).name); 
+    end
+    x = x(:)'; % Convertir a vector fila
+    t = (0:length(x)-1)/Fs;
+    
+    for j = 1:length(tipos_filtro)
+        tipo_filtro = tipos_filtro{j};
+        
+        % Filtrado de la señal según el banco de filtros elegido
+        if strcmp(tipo_filtro, 'Analogico')
+            y1 = lsim(sys_lp, x, t)';
+            y2 = lsim(sys_bp1, x, t)';
+            y3 = lsim(sys_bp2, x, t)';
+            y4 = lsim(sys_hp, x, t)';
+        elseif strcmp(tipo_filtro, 'IIR')
+            y1 = filter(bz_lp, az_lp, x);
+            y2 = filter(bz_bp1, az_bp1, x);
+            y3 = filter(bz_bp2, az_bp2, x);
+            y4 = filter(bz_hp, az_hp, x);
+        elseif strcmp(tipo_filtro, 'FIR')
+            y1 = filter(b_fir_lp, 1, x);
+            y2 = filter(b_fir_bp1, 1, x);
+            y3 = filter(b_fir_bp2, 1, x);
+            y4 = filter(b_fir_hp, 1, x);
+        end
+    
+    % Detectores de envolvente (Rectificación + PasaBajos/Suavizado)
+    % Usamos un filtro pasabajos de suavizado simple
+    fc_env = 2000; % Frecuencia de corte para el detector de envolvente
+    [b_env, a_env] = butter(2, fc_env/(Fs/2), 'low');
+    
+    env1 = filter(b_env, a_env, abs(y1));
+    env2 = filter(b_env, a_env, abs(y2));
+    env3 = filter(b_env, a_env, abs(y3));
+    env4 = filter(b_env, a_env, abs(y4));
+    
+    % Comparador y Decisor
+    % Se asume que el símbolo transmitido es el que presenta la mayor energía/amplitud
+    % Se agrupan los cuatro canales en una matriz
+    envolventes = [env1; env2; env3; env4];
+    [~, simbolos_detectados] = max(envolventes);
+    
+    % Mapeo a bits (Codificador)
+    % Asumiendo codificación Gray o Natural:
+    % f1 -> 00
+    % f2 -> 01
+    % f3 -> 10
+    % f4 -> 11
+    bits = zeros(2, length(simbolos_detectados));
+    bits(1, simbolos_detectados == 3 | simbolos_detectados == 4) = 1;
+    bits(2, simbolos_detectados == 2 | simbolos_detectados == 4) = 1;
+    
+    % Mostrar resultados (Se grafica una porción representativa para evitar saturación visual)
+    N_plot = min(1000, length(x));
+    
+    figure('Name', sprintf('Resultados - %s (%s)', archivo, tipo_filtro));
+    subplot(3, 1, 1);
+    plot(t(1:N_plot), x(1:N_plot));
+    title(sprintf('Señal Original - %s', archivo));
+    xlabel('Tiempo (s)'); ylabel('Amplitud');
+    
+    subplot(3, 1, 2);
+    plot(t(1:N_plot), env1(1:N_plot), 'r', t(1:N_plot), env2(1:N_plot), 'g', ...
+         t(1:N_plot), env3(1:N_plot), 'b', t(1:N_plot), env4(1:N_plot), 'm');
+    title('Envolventes de las salidas de los filtros');
+    legend('f1 (00)', 'f2 (01)', 'f3 (10)', 'f4 (11)');
+    xlabel('Tiempo (s)'); ylabel('Amplitud');
+    
+    subplot(3, 1, 3);
+    plot(t(1:N_plot), simbolos_detectados(1:N_plot));
+    title('Símbolo Detectado en el Tiempo (1=f1, 2=f2, 3=f3, 4=f4)');
+    xlabel('Tiempo (s)'); ylabel('Símbolo');
+    ylim([0.5 4.5]);
+    
+    end % Fin loop j
+end % Fin loop k

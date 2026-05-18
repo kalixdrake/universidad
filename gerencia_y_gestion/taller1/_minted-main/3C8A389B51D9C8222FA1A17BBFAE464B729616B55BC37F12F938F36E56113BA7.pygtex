@@ -1,0 +1,15 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{N}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{l+m+mi}{200}\PYG{p}{;}\PYG{+w}{           }\PYG{c}{\PYGZpc{} orden del filtro}
+\PYG{c}{\PYGZpc{} frecuencias de corte}
+\PYG{n}{fc1}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{l+m+mi}{11300}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{fc2}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{l+m+mi}{12500}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{fc3}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{l+m+mi}{13700}\PYG{p}{;}
+\PYG{c}{\PYGZpc{} normalización}
+\PYG{n}{W1}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fc1}\PYG{o}{/}\PYG{p}{(}\PYG{n}{fs}\PYG{o}{/}\PYG{l+m+mi}{2}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{W2}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fc2}\PYG{o}{/}\PYG{p}{(}\PYG{n}{fs}\PYG{o}{/}\PYG{l+m+mi}{2}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{W3}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fc3}\PYG{o}{/}\PYG{p}{(}\PYG{n}{fs}\PYG{o}{/}\PYG{l+m+mi}{2}\PYG{p}{);}
+
+\PYG{c}{\PYGZpc{} filtro pasabajos}
+\PYG{n}{b1}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fir1}\PYG{p}{(}\PYG{n}{N}\PYG{p}{,}\PYG{n}{W1}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}low\PYGZsq{}}\PYG{p}{,}\PYG{n}{hamming}\PYG{p}{(}\PYG{n}{N}\PYG{o}{+}\PYG{l+m+mi}{1}\PYG{p}{));}
+\PYG{c}{\PYGZpc{} filtro pasabanda}
+\PYG{n}{b2}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fir1}\PYG{p}{(}\PYG{n}{N}\PYG{p}{,[}\PYG{n}{W1}\PYG{+w}{ }\PYG{n}{W2}\PYG{p}{],}\PYG{l+s}{\PYGZsq{}bandpass\PYGZsq{}}\PYG{p}{,}\PYG{n}{hamming}\PYG{p}{(}\PYG{n}{N}\PYG{o}{+}\PYG{l+m+mi}{1}\PYG{p}{));}
+\PYG{n}{b3}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fir1}\PYG{p}{(}\PYG{n}{N}\PYG{p}{,[}\PYG{n}{W2}\PYG{+w}{ }\PYG{n}{W3}\PYG{p}{],}\PYG{l+s}{\PYGZsq{}bandpass\PYGZsq{}}\PYG{p}{,}\PYG{n}{hamming}\PYG{p}{(}\PYG{n}{N}\PYG{o}{+}\PYG{l+m+mi}{1}\PYG{p}{));}
+\PYG{c}{\PYGZpc{} filtro pasaaltos}
+\PYG{n}{b4}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{fir1}\PYG{p}{(}\PYG{n}{N}\PYG{p}{,}\PYG{n}{W3}\PYG{p}{,}\PYG{l+s}{\PYGZsq{}high\PYGZsq{}}\PYG{p}{,}\PYG{n}{hamming}\PYG{p}{(}\PYG{n}{N}\PYG{o}{+}\PYG{l+m+mi}{1}\PYG{p}{));}
+\end{Verbatim}
