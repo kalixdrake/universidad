@@ -2,15 +2,15 @@
 clear; clc; close all;
 
 %% 1. Parámetros del Proyecto 
-L = 0.20;           % Lado
+L = 0.2;           % Lado
 n = 7;              % Número de hojas
 v_const = 0.1;      % Velocidad deseada
-S = 1;           % Escala
-beta = deg2rad(20); % Rotación
+S = 1.25;           % Escala
+beta = deg2rad(45); % Rotación
 
 % Longitud de eslabones, masas y centros de gravedad
-l1 = 0.18; m_link1 = 0.700; cg1 = l1 / 2; % cg1 es el centro de gravedad
-l2 = 0.18; m_link2 = 0.600; cg2 = l2 / 2; % Igual con cg2
+l1 = 0.195; m_link1 = 0.700; cg1 = l1 / 2; % cg1 es el centro de gravedad
+l2 = 0.25; m_link2 = 0.600; cg2 = l2 / 2; % Igual con cg2
 m_motor2 = 0.300; m_tip = 0.050;
 g = 9.81;
 kgfcm_to_Nm = 0.0980665;
@@ -78,16 +78,16 @@ y_traj = S * r_t .* sin(phi_t + beta);
 x_traj(end) = x_traj(1); y_traj(end) = y_traj(1);
 
 % Desplazamiento del Origen al espacio de trabajo seguro
-X_centro = 0.125;  Y_centro = 0.19; 
+X_centro = 0.2;  Y_centro = 0.2; 
 x_traj_desp = x_traj + X_centro;
 y_traj_desp = y_traj + Y_centro;
 
 %% 3. Posición "Home" (Replegado Seguro, evitando singularidad)
 disp('1. Calculando posición Home (Segura)...');
 
-% Evitamos la singularidad en (0,0) abriendo el brazo ligeramente
-th1_home = deg2rad(80);           
-th2_home = deg2rad(-150);             
+% Puño a la izquierda (x<0) y por encima (y>0) del origen
+th1_home = deg2rad(120);           
+th2_home = deg2rad(-40);             
 
 % Calculamos la posición inicial (x_inicio, y_inicio) por cinemática directa
 x_inicio = l1 * cos(th1_home) + l2 * cos(th1_home + th2_home);
