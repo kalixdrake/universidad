@@ -4,7 +4,6 @@ Gestiona el flujo completo: conexión → configuración → cálculo → ejecuc
 """
 import customtkinter as ctk
 import logging
-from pathlib import Path
 
 from .connection_dialog import ConnectionDialog
 from .config_panel import ConfigPanel
@@ -12,9 +11,8 @@ from .trajectory_view import TrajectoryView
 
 logger = logging.getLogger(__name__)
 
-# Tema
+# Tema oscuro por defecto de customtkinter
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme(str(Path(__file__).parent.parent / "theme.json"))
 
 
 class MainWindow(ctk.CTk):

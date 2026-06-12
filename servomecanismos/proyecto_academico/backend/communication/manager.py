@@ -60,16 +60,19 @@ class CommunicationManager:
         self._rx_thread: Optional[threading.Thread] = None
         self._use_rust = False
 
-        # Intentar cargar el módulo Rust
+        # Intentar cargar el módulo Rust (compilado con maturin)
         try:
             import rust_comm
+            # Verificar que tiene la clase esperada (puede haber otro módulo rust_comm)
+            if not hasattr(rust_comm, 'Esp32Connection'):
+                raise ImportError("El módulo rust_comm encontrado no es el de este proyecto")
             self._rust_conn = rust_comm.Esp32Connection()
             self._use_rust = True
             logger.info("rust_comm cargado exitosamente.")
-        except ImportError:
+        except (ImportError, AttributeError) as e:
             self._rust_conn = None
             self._use_rust = False
-            logger.info("rust_comm no disponible, usando pyserial + socket.")
+            logger.info("rust_comm no disponible (%s), usando pyserial + socket.", e)
 
     # ── Propiedades ────────────────────────────────────
     @property
