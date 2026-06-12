@@ -4,16 +4,14 @@
 # === GUI ===
 customtkinter>=5.2.0
 
-# === Cálculo científico ===
+# === Cálculo científico (port de MATLAB) ===
 numpy>=1.24.0
 scipy>=1.10.0
 matplotlib>=3.7.0
 
-# === Comunicación serie (fallback si rust_comm no está disponible) ===
+# === Comunicación serie (fallback si rust_comm no está compilado) ===
 pyserial>=3.5
 
-# === Rust bindings (compilar con: cd rust_comm && maturin develop --release) ===
-# maturin>=1.4.0
-# (rust_comm se instala vía maturin develop, no vía pip)
+# === Compilación del módulo Rust (PyO3) ===
+maturin>=1.4.0
 
-# === Utilidades ===

@@ -9,12 +9,33 @@ mod protocol;
 mod serial_link;
 
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use std::sync::Mutex;
 
 use discover::{discover_esp32_usb, discover_esp32_network};
-use protocol::{Frame, TelemetryFrame};
+use protocol::Frame;
 use serial_link::SerialLink;
+
+/// Datos de telemetría expuestos a Python.
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct TelemetryData {
+    #[pyo3(get)]
+    pub timestamp_us: u64,
+    #[pyo3(get)]
+    pub theta1: f64,
+    #[pyo3(get)]
+    pub theta2: f64,
+    #[pyo3(get)]
+    pub omega1: f64,
+    #[pyo3(get)]
+    pub omega2: f64,
+    #[pyo3(get)]
+    pub waypoint_index: u32,
+    #[pyo3(get)]
+    pub state: u8,
+    #[pyo3(get)]
+    pub error_code: u8,
+}
 
 /// Estado de la conexión con la ESP32.
 #[pyclass]
@@ -93,13 +114,22 @@ impl Esp32Connection {
     }
 
     /// Lee un frame de telemetría desde la ESP32 (bloqueante con timeout).
-    fn read_telemetry(&self, timeout_ms: u64) -> PyResult<Option<TelemetryFrame>> {
+    fn read_telemetry(&self, timeout_ms: u64) -> PyResult<Option<TelemetryData>> {
         let mut link_opt = self.link.lock().unwrap();
         match link_opt.as_mut() {
             Some(link) => match link.read_frame(timeout_ms) {
                 Ok(Some(frame)) => {
                     if let Frame::Telemetry(t) = frame {
-                        Ok(Some(t))
+                        Ok(Some(TelemetryData {
+                            timestamp_us: t.timestamp_us,
+                            theta1: t.theta1,
+                            theta2: t.theta2,
+                            omega1: t.omega1,
+                            omega2: t.omega2,
+                            waypoint_index: t.waypoint_index,
+                            state: t.state,
+                            error_code: t.error_code,
+                        }))
                     } else {
                         Ok(None)
                     }
@@ -150,5 +180,6 @@ impl Esp32Connection {
 #[pymodule]
 fn rust_comm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Esp32Connection>()?;
+    m.add_class::<TelemetryData>()?;
     Ok(())
 }

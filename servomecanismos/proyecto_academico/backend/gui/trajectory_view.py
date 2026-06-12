@@ -35,6 +35,7 @@ class TrajectoryView(ctk.CTkFrame):
         self._ref_trajectory: dict | None = None
         self._running = False
         self._start_time: float | None = None
+        self._is_connected = False
 
         # ── Layout ────────────────────────────────────
         self.grid_columnconfigure(0, weight=1)
@@ -98,12 +99,24 @@ class TrajectoryView(ctk.CTkFrame):
         """Establece la trayectoria de referencia para dibujar."""
         self._ref_trajectory = trajectory
         self._telem_buf.clear()
-        self.btn_send.configure(state="normal")
-        self.lbl_status.configure(text="Listo para enviar")
+        self._update_send_button()
+        self.lbl_status.configure(text="Listo para enviar" if self._is_connected else "Trayectoria lista (sin ESP32)")
 
         # Dibujar referencia
         self._draw_reference()
         self._start_animation()
+
+    def set_connected(self, connected: bool):
+        """Activa/desactiva el botón de envío según conexión."""
+        self._is_connected = connected
+        self._update_send_button()
+
+    def _update_send_button(self):
+        """Habilita el botón de envío solo si hay trayectoria y conexión."""
+        if self._ref_trajectory is not None and self._is_connected:
+            self.btn_send.configure(state="normal")
+        else:
+            self.btn_send.configure(state="disabled")
 
     def on_telemetry(self, telem: TelemetryFrame):
         """Callback que recibe telemetría de la ESP32."""

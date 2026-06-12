@@ -4,7 +4,7 @@ Generación de trayectoria de trébol (trefoil) con N pétalos.
 Port directo de caracterizacion_trayectoria_trebol.m
 """
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import PchipInterpolator
 from scipy.signal import savgol_filter
 
 
@@ -65,7 +65,7 @@ def parametrize_constant_speed(
     t = np.arange(0, T_total + dt, dt)
     s_t = v_const * t
 
-    phi_t = interp1d(s_acum, phi_raw, kind='pchip', bounds_error=False, fill_value='extrapolate')(s_t)
+    phi_t = PchipInterpolator(s_acum, phi_raw)(s_t)
 
     r_t = r0 + A * np.cos(n_petals * phi_t)
     x_traj = scale * r_t * np.cos(phi_t + beta) + x_center

@@ -51,8 +51,12 @@ class MainWindow(ctk.CTk):
         )
         self.connection_dialog.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # ── Tab 2: Configuración (se llena al conectar) ──
-        self.config_panel: ConfigPanel | None = None
+        # ── Tab 2: Configuración (siempre visible) ────
+        self.config_panel = ConfigPanel(
+            self.tab_config,
+            on_calculate=self._on_calculate,
+        )
+        self.config_panel.pack(fill="both", expand=True, padx=5, pady=5)
 
         # ── Tab 3: Monitoreo ──────────────────────────
         self.trajectory_view = TrajectoryView(
@@ -79,18 +83,8 @@ class MainWindow(ctk.CTk):
         info = comm_mgr.info
         mode = "USB" if info.state.value == "usb" else "Red WiFi"
         self.status_var.set(f"Conectado por {mode} a ESP32 | Puerto: {info.port or info.address}")
-
-        # Inicializar panel de configuración
-        if self.config_panel is None:
-            self.config_panel = ConfigPanel(
-                self.tab_config,
-                on_calculate=self._on_calculate,
-            )
-            self.config_panel.pack(fill="both", expand=True, padx=5, pady=5)
-
-        # Habilitar tab de configuración
+        self.trajectory_view.set_connected(True)
         self.tabview.set("2. Configuración")
-        self._update_tab_state()
 
     def _on_calculate(self, trajectory: dict):
         """Callback cuando se presiona 'Calcular' en el panel de configuración."""
@@ -106,8 +100,11 @@ class MainWindow(ctk.CTk):
 
     def _on_send_trajectory(self):
         """Envía la trayectoria calculada a la ESP32."""
-        if not self._comm_mgr or not self._trajectory_data:
-            self.status_var.set("Error: No hay trayectoria calculada o conexión activa")
+        if not self._comm_mgr:
+            self.status_var.set("⚠ No hay ESP32 conectada. Vaya a la pestaña '1. Conexión' para conectar.")
+            return
+        if not self._trajectory_data:
+            self.status_var.set("Error: No hay trayectoria calculada")
             return
 
         from ..communication import TrajectoryData

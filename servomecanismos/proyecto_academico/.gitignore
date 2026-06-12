@@ -1,0 +1,41 @@
+# ── Rust build artifacts ────────────────────────────
+backend/rust_comm/target/
+backend/esp32_firmware/target/
+**/target/
+
+# ── Python ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ── Virtual environment ─────────────────────────────
+.venv/
+venv/
+env/
+
+# ── IDE / Editor ────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.lnk
+
+# ── MATLAB autosave ─────────────────────────────────
+*.asv
+
+# ── Rust (Cargo.lock para librerías) ────────────────
+# Cargo.lock se commitea solo para binarios finales
+
+# ── Python packaging ────────────────────────────────
+*.whl
+pip-wheel-metadata/

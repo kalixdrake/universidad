@@ -109,7 +109,7 @@ impl Frame {
         }
 
         let payload_len = u16::from_le_bytes([data[2], data[3]]) as usize;
-        let msg_type = data[4];
+        let _msg_type = data[4];
 
         if data.len() < HEADER_SIZE + payload_len + CRC_SIZE {
             return Err("Longitud de trama insuficiente".into());

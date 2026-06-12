@@ -35,7 +35,6 @@ pub fn discover_esp32_usb() -> Option<String> {
 
 /// Busca la ESP32 en la red local vía UDP broadcast en puerto 4210.
 pub fn discover_esp32_network() -> Option<String> {
-    use socket2::{Domain, Protocol, Socket, Type};
     use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 
     let broadcast_addr = SocketAddrV4::new(Ipv4Addr::new(255, 255, 255, 255), 4210);
