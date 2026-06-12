@@ -1,8 +1,8 @@
 [package]
 name = "esp32_2r_firmware"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
-description = "Firmware para ESP32 del robot 2R — recibe trayectorias y envía telemetría"
+description = "Firmware para ESP32 del robot 2R — control PID 1 kHz, MCPWM 25 kHz, telemetría 100 Hz"
 
 [profile.release]
 opt-level = "s"
@@ -11,38 +11,15 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-# Framework ESP32
+# Framework ESP32 (MCPWM, PCNT, UART)
 esp-hal = { version = "0.19", features = ["esp32"] }
 esp-backtrace = { version = "0.13", features = ["esp32", "exception-handler", "panic-handler"] }
 esp-println = { version = "0.10", features = ["esp32", "uart"] }
-esp-wifi = { version = "0.7", features = ["esp32", "wifi", "esp-now"] }
-esp-storage = "0.3"
 
-# Periféricos y protocolos
-embedded-io = "0.6"
-embedded-io-async = "0.6"
-embedded-hal = "1.0"
-embedded-hal-async = "1.0"
-nb = "1.1"
-
-# Serialización y protocolo
+# Serialización (no_std)
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-postcard = "1.0"          # serde para no_std (más ligero que bincode)
-crc32fast = { version = "1.4", default-features = false }
-
-# Red
 heapless = "0.8"
-smoltcp = { version = "0.11", default-features = false }
 
 # Utilidades
-fugit = "0.3"
-embassy-time = "0.3"
-embassy-sync = "0.6"
-critical-section = "1.1"
+libm = "0.2"
 
-# Control de motores (PWM + encoder)
-libm = "0.2"               # Funciones matemáticas para no_std
-
-[features]
-default = ["wifi-enabled"]
-wifi-enabled = []
