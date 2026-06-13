@@ -20,10 +20,10 @@ def build_full_trajectory(
     L: float = 0.2,
     x_center: float = 0.2,
     y_center: float = 0.2,
-    th1_home_deg: float = 120.0,
-    th2_home_deg: float = -40.0,
+    th1_home_deg: float = 190.0,
+    th2_home_deg: float = -130.0,
     l1: float = 0.195,
-    l2: float = 0.25,
+    l2: float = 0.260,
     dt: float = 0.01,
 ) -> dict:
     """

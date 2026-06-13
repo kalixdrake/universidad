@@ -20,6 +20,14 @@ class FrameType(IntEnum):
     ACK = 0x20
     TELEMETRY = 0x30
     HEARTBEAT = 0x40
+    # ── Comandos de calibración ───────────────────────
+    CALIBRATION_CMD = 0x50     # Comando de calibración genérico
+    CALIBRATION_DATA = 0x51    # Respuesta con datos de calibración
+    CALIBRATION_SAVE = 0x52    # Guardar calibración en NVS
+    CALIBRATION_LOAD = 0x53    # Cargar calibración de NVS
+    CALIBRATION_STATUS = 0x54  # Estado de calibración
+    MOTOR_PWM_CMD = 0x60       # Control PWM directo por motor
+    MOTOR_PWM_TELEM = 0x61     # Telemetría extendida con PWM actual
 
 
 SYNC_WORD = b'\xAA\x55'
@@ -72,6 +80,94 @@ class TrajectoryData:
     dt: float = 0.01
     cycles: int = 1
 
+
+# ── Datos de calibración ──────────────────────────────
+
+@dataclass
+class MotorPwmCommand:
+    """Comando PWM directo para un motor específico."""
+    motor_id: int = 1        # 1=base, 2=codo
+    duty_cycle: float = 0.0  # 0.0 a 1.0
+    duration_ms: int = 0     # 0 = indefinido
+
+    def to_bytes(self) -> bytes:
+        return struct.pack('<BfI', self.motor_id, self.duty_cycle, self.duration_ms)
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> 'MotorPwmCommand':
+        motor_id, duty, dur = struct.unpack('<BfI', data[:9])
+        return cls(motor_id=motor_id, duty_cycle=duty, duration_ms=dur)
+
+
+@dataclass
+class MotorPwmTelemetry:
+    """Telemetría extendida incluyendo PWM actual y encoder raw."""
+    timestamp_us: int = 0
+    theta1: float = 0.0
+    theta2: float = 0.0
+    omega1: float = 0.0
+    omega2: float = 0.0
+    pwm1: float = 0.0          # PWM actual motor 1
+    pwm2: float = 0.0          # PWM actual motor 2
+    encoder1_raw: int = 0      # Encoder raw motor 1
+    encoder2_raw: int = 0      # Encoder raw motor 2
+
+    def to_bytes(self) -> bytes:
+        return struct.pack(
+            '<Qddddffii',
+            self.timestamp_us,
+            self.theta1, self.theta2,
+            self.omega1, self.omega2,
+            self.pwm1, self.pwm2,
+            self.encoder1_raw, self.encoder2_raw,
+        )
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> 'MotorPwmTelemetry':
+        vals = struct.unpack('<Qddddffii', data[:52])
+        return cls(
+            timestamp_us=vals[0],
+            theta1=vals[1], theta2=vals[2],
+            omega1=vals[3], omega2=vals[4],
+            pwm1=vals[5], pwm2=vals[6],
+            encoder1_raw=vals[7], encoder2_raw=vals[8],
+        )
+
+
+@dataclass
+class CalibrationStatus:
+    """Estado de calibración reportado por la ESP32."""
+    position_calibrated: bool = False
+    motor_characterized: bool = False
+    nvs_available: bool = False
+    motor1_stall_detected: bool = False
+    motor2_stall_detected: bool = False
+    error_code: int = 0
+
+    def to_bytes(self) -> bytes:
+        flags = (
+            (1 if self.position_calibrated else 0) |
+            (2 if self.motor_characterized else 0) |
+            (4 if self.nvs_available else 0) |
+            (8 if self.motor1_stall_detected else 0) |
+            (16 if self.motor2_stall_detected else 0)
+        )
+        return struct.pack('<BB', flags, self.error_code)
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> 'CalibrationStatus':
+        flags, err = struct.unpack('<BB', data[:2])
+        return cls(
+            position_calibrated=bool(flags & 1),
+            motor_characterized=bool(flags & 2),
+            nvs_available=bool(flags & 4),
+            motor1_stall_detected=bool(flags & 8),
+            motor2_stall_detected=bool(flags & 16),
+            error_code=err,
+        )
+
+
+# ── Empaquetado ──────────────────────────────────────
 
 def pack_frame(msg_type: FrameType, payload: bytes) -> bytes:
     """Empaqueta una trama con sync word, longitud, tipo y CRC32."""

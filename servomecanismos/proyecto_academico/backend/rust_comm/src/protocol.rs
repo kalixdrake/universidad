@@ -31,6 +31,17 @@ pub enum Frame {
     Telemetry(TelemetryFrame),
     /// Heartbeat / keep-alive
     Heartbeat { seq: u32 },
+    // ── Comandos de calibración ───────────────────────
+    /// Comando PWM directo para un motor
+    MotorPwmCmd(MotorPwmCommand),
+    /// Telemetría extendida con PWM y encoder raw
+    MotorPwmTelem(MotorPwmTelemetry),
+    /// Guardar datos de calibración en NVS
+    CalibrationSave(CalibrationPayload),
+    /// Cargar datos de calibración desde NVS
+    CalibrationLoad,
+    /// Estado actual de calibración
+    CalibrationStatus(CalibrationStatusFrame),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +88,47 @@ pub struct TelemetryFrame {
     /// Estado: 0=idle, 1=running, 2=error, 3=completed
     pub state: u8,
     /// Código de error (si state=2)
+    pub error_code: u8,
+}
+
+// ── Estructuras de calibración ───────────────────────
+
+/// Comando PWM directo para un motor específico.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MotorPwmCommand {
+    pub motor_id: u8,        // 1 = base, 2 = codo
+    pub duty_cycle: f32,     // 0.0 a 1.0
+    pub duration_ms: u32,    // 0 = indefinido
+}
+
+/// Telemetría extendida con PWM actual y encoder raw.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MotorPwmTelemetry {
+    pub timestamp_us: u64,
+    pub theta1: f64,
+    pub theta2: f64,
+    pub omega1: f64,
+    pub omega2: f64,
+    pub pwm1: f32,
+    pub pwm2: f32,
+    pub encoder1_raw: i32,
+    pub encoder2_raw: i32,
+}
+
+/// Payload para guardar/cargar calibración (JSON serializado).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationPayload {
+    pub json_data: String,   // Datos de calibración en JSON
+}
+
+/// Estado de calibración reportado por la ESP32.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationStatusFrame {
+    pub position_calibrated: bool,
+    pub motor_characterized: bool,
+    pub nvs_available: bool,
+    pub motor1_stall_detected: bool,
+    pub motor2_stall_detected: bool,
     pub error_code: u8,
 }
 
@@ -145,6 +197,11 @@ impl Frame {
             Frame::Ack { .. } => 0x20,
             Frame::Telemetry(_) => 0x30,
             Frame::Heartbeat { .. } => 0x40,
+            Frame::MotorPwmCmd(_) => 0x60,
+            Frame::MotorPwmTelem(_) => 0x61,
+            Frame::CalibrationSave(_) => 0x52,
+            Frame::CalibrationLoad => 0x53,
+            Frame::CalibrationStatus(_) => 0x54,
         }
     }
 }

@@ -12,17 +12,20 @@ manipulador robótico planar de 2 grados de libertad (2R).
 │  ┌────────────┐   ┌──────────────────┐   ┌────────────────────┐  │
 │  │  GUI       │   │  Trayectorias    │   │  Comunicación      │  │
 │  │ customtkinter│  │  numpy / scipy   │   │  pyserial / rust   │  │
-│  │  • Sliders  │   │  • Trébol N-pétalos│  │  • USB (serial)   │  │
-│  │  • Preview  │   │  • Bézier approach│  │  • WiFi (TCP/UDP)  │  │
-│  │  • Monitoreo │  │  • Cinemática inv │   │  • Protocolo CRC32 │  │
-│  └────────────┘   └──────────────────┘   └────────┬───────────┘  │
+│  │  • Conexión │   │  • Trébol N-pétalos│  │  • USB (serial)   │  │
+│  │  • Calibración│ │  • Bézier approach│  │  • WiFi (TCP/UDP)  │  │
+│  │  • Sliders  │   │  • Cinemática inv │   │  • Protocolo CRC32 │  │
+│  │  • Preview  │   │  • Dinámica inv   │   │  • Calibración    │  │
+│  │  • Monitoreo │  └──────────────────┘   └────────┬───────────┘  │
+│  └────────────┘                                     │              │
 └───────────────────────────────────────────────────┬──────────────┘
                                                     │ USB / WiFi
 ┌───────────────────────────────────────────────────┴──────────────┐
-│                        ESP32 (Rust firmware)                      │
+│                ESP32 (Rust firmware, no_std)                      │
 │  ┌──────────────────┐   ┌──────────────┐   ┌──────────────────┐  │
 │  │  Recepción       │   │  Control PID │   │  Telemetría      │  │
 │  │  de trayectoria  │   │  2 motores DC│   │  100 Hz          │  │
+│  │  + Calibración   │   │  1 kHz       │   │  + NVS persist.  │  │
 │  └──────────────────┘   └──────────────┘   └──────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -151,8 +154,9 @@ cd ../..
 | Pestaña | Función |
 |---------|---------|
 | **1. Conexión** | Busca la ESP32 en red WiFi o USB. Permite configurar WiFi en la ESP32 vía USB. |
-| **2. Configuración** | Sliders interactivos con preview en tiempo real del trébol, torques y ángulos. |
-| **3. Monitoreo** | Vista de la trayectoria de referencia (azul) y la trayectoria real (roja) recibida por telemetría. |
+| **2. Calibración** | Asistente paso a paso para calibrar posición home, cero, límites angulares, torque de rozamiento y caracterización de curvas motor. |
+| **3. Configuración** | Sliders interactivos con preview en tiempo real del trébol, torques y ángulos. |
+| **4. Monitoreo** | Vista de la trayectoria de referencia (azul) y la trayectoria real (roja) recibida por telemetría. |
 
 ### Parámetros del trébol
 
@@ -163,6 +167,51 @@ cd ../..
 | Velocidad | 1 – 10 cm/s | Velocidad tangencial de dibujado |
 | Rotación | ±45° | Ángulo de rotación del trébol |
 | Ciclos | 1 – 10 | Veces que se repite la trayectoria |
+
+## Módulo de Calibración
+
+El asistente de calibración (`backend/calibration/`) permite preparar el robot para
+funcionar correctamente sin necesidad de conocer los detalles internos.
+
+### Flujo de calibración
+
+```
+1. Verificar calibración previa (ESP32 NVS)
+2. PWM rozamiento base → mover muy despacio hasta detectar movimiento
+3. Límites angulares base → mover con PWM mínimo hasta stall mecánico
+4. Cero base → el usuario indica cuál es la posición home (θ₁ = 175°)
+5. PWM rozamiento codo → igual que base pero ya en posición home
+6. Límites angulares codo
+7. Cero codo (θ₂ = -128°)
+8. Caracterización de curvas motor → barrido PWM 5%-100%
+9. Ajuste función de transferencia G(s) = K/(τs + 1)
+10. Guardar en memoria persistente (ESP32 NVS + archivo local)
+```
+
+### Tipos de calibración
+
+| Tipo | Cuándo | Qué hace |
+|------|--------|----------|
+| **Completa** | Primera vez | Posición + caracterización de motores (FT) |
+| **Solo posición** | Recalibración | Home, cero y límites (no toca curva motor) |
+
+### Parámetros físicos
+
+| Parámetro | Valor |
+|-----------|-------|
+| Eslabón 1 (base) | 195 mm centro a centro |
+| Eslabón 2 (codo) | 260 mm centro a centro |
+| Home θ₁ (base) | 190° (robot replegado a la izquierda) |
+| Home θ₂ (codo) | -130° (plegado debajo de la línea media del trébol) |
+| Motor base | 12V, 218:1, 30 kgf·cm |
+| Motor codo | 24V, 270:1, 19 kgf·cm |
+
+### Persistencia
+
+- Los offsets de posición se guardan en **NVS de la ESP32** (sobrevive a apagados).
+- Si la ESP32 no recuerda la posición al iniciar, se fuerza una recalibración.
+- La caracterización de motores se realiza **una sola vez**.
+- Backup local en `calibration_data.json`.
 
 ## Estructura del proyecto
 
@@ -175,8 +224,15 @@ proyecto_academico/
 │   ├── gui/                         # Interfaz gráfica (customtkinter)
 │   │   ├── main_window.py           # Ventana principal con tabs
 │   │   ├── connection_dialog.py     # Flujo conexión red → USB
+│   │   ├── calibration_wizard.py    # Asistente de calibración paso a paso
 │   │   ├── config_panel.py          # Sliders + preview interactivo
 │   │   └── trajectory_view.py       # Monitoreo en tiempo real
+│   │
+│   ├── calibration/                 # Calibración y setup inicial
+│   │   ├── __init__.py              # Paquete de calibración
+│   │   ├── calibration_manager.py   # Orquestador del flujo completo
+│   │   ├── motor_identification.py  # Rozamiento, límites, curvas PWM
+│   │   └── homing.py                # Home/cero de articulaciones
 │   │
 │   ├── trajectory/                  # Cálculo de trayectorias
 │   │   ├── trefoil.py               # Generación del trébol + Bézier

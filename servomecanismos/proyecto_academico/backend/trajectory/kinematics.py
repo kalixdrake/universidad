@@ -9,8 +9,8 @@ from scipy.signal import savgol_filter
 
 
 # ── Parámetros físicos del robot ──────────────────────
-l1 = 0.195          # Longitud eslabón 1 [m]
-l2 = 0.25            # Longitud eslabón 2 [m]
+l1 = 0.195          # Longitud eslabón 1 [m] (195 mm centro a centro)
+l2 = 0.260          # Longitud eslabón 2 [m] (260 mm centro a centro)
 m_link1 = 0.700      # Masa eslabón 1 [kg]
 m_link2 = 0.600      # Masa eslabón 2 [kg]
 cg1 = l1 / 2         # Centro de gravedad eslabón 1 [m]

@@ -226,6 +226,12 @@ mod protocol {
         Ack { success: bool, message: heapless::String<64> },
         Telemetry { timestamp_us: u64, theta1: f32, theta2: f32, omega1: f32, omega2: f32, waypoint_index: u32, state: u8, error_code: u8 },
         Heartbeat { seq: u32 },
+        // ── Calibración ──────────────────────────────
+        MotorPwmCmd { motor_id: u8, duty_cycle: f32, duration_ms: u32 },
+        MotorPwmTelem { timestamp_us: u64, theta1: f32, theta2: f32, omega1: f32, omega2: f32, pwm1: f32, pwm2: f32, encoder1_raw: i32, encoder2_raw: i32 },
+        CalibrationSave { json_data: heapless::Vec<u8, 1024> },
+        CalibrationLoad,
+        CalibrationStatus { flags: u8, error_code: u8 },
     }
 }
 

@@ -17,6 +17,7 @@ from enum import Enum
 
 from . import (
     FrameType, TelemetryFrame, TrajectoryData,
+    MotorPwmCommand, MotorPwmTelemetry, CalibrationStatus,
     pack_frame, pack_telemetry, pack_trajectory_chunk, unpack_frame,
 )
 
@@ -252,6 +253,109 @@ class CommunicationManager:
     def send_emergency_stop(self) -> bool:
         """Envía parada de emergencia."""
         return self._send_raw(pack_frame(FrameType.EMERGENCY_STOP, b''))
+
+    # ── Comandos de calibración ────────────────────────
+
+    def send_motor_pwm(self, motor_id: int, duty_cycle: float, duration_ms: int = 0) -> bool:
+        """
+        Envía un comando PWM directo para un motor específico.
+
+        Args:
+            motor_id: 1 = base, 2 = codo.
+            duty_cycle: 0.0 a 1.0 (0% a 100%).
+            duration_ms: Duración del pulso (0 = indefinido, hasta nuevo comando).
+        """
+        from . import MotorPwmCommand
+        cmd = MotorPwmCommand(motor_id=motor_id, duty_cycle=duty_cycle, duration_ms=duration_ms)
+        return self._send_raw(pack_frame(FrameType.MOTOR_PWM_CMD, cmd.to_bytes()))
+
+    def stop_motor(self, motor_id: int) -> bool:
+        """Detiene un motor específico (PWM = 0)."""
+        return self.send_motor_pwm(motor_id, 0.0)
+
+    def stop_all_motors(self) -> bool:
+        """Detiene ambos motores."""
+        ok1 = self.send_motor_pwm(1, 0.0)
+        ok2 = self.send_motor_pwm(2, 0.0)
+        return ok1 and ok2
+
+    def save_calibration(self, calibration_data: dict) -> bool:
+        """
+        Guarda datos de calibración en la memoria persistente (NVS) de la ESP32.
+
+        Args:
+            calibration_data: Diccionario con todos los parámetros de calibración.
+        """
+        import json
+        payload = json.dumps(calibration_data).encode('utf-8')
+        return self._send_raw(pack_frame(FrameType.CALIBRATION_SAVE, payload))
+
+    def load_calibration(self) -> Optional[dict]:
+        """
+        Carga datos de calibración desde la memoria persistente (NVS) de la ESP32.
+
+        Returns:
+            Diccionario con parámetros o None si no disponible.
+        """
+        import json
+        frame = pack_frame(FrameType.CALIBRATION_LOAD, b'')
+        if not self._send_raw(frame):
+            return None
+
+        # Esperar respuesta
+        time.sleep(0.3)
+        buf = bytearray()
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            data = self._read_available()
+            if data:
+                buf.extend(data)
+                if len(buf) >= 7:
+                    msg_type, payload = unpack_frame(bytes(buf))
+                    if msg_type == FrameType.CALIBRATION_DATA and payload:
+                        try:
+                            return json.loads(payload.decode('utf-8'))
+                        except Exception:
+                            return None
+            time.sleep(0.05)
+        return None
+
+    def request_calibration_status(self) -> Optional[dict]:
+        """
+        Solicita el estado de calibración de la ESP32.
+
+        Returns:
+            Dict con position_calibrated, motor_characterized, nvs_available, etc.
+        """
+        from . import CalibrationStatus
+        frame = pack_frame(FrameType.CALIBRATION_STATUS, b'')
+        if not self._send_raw(frame):
+            return None
+
+        time.sleep(0.2)
+        buf = bytearray()
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            data = self._read_available()
+            if data:
+                buf.extend(data)
+                if len(buf) >= 7:
+                    msg_type, payload = unpack_frame(bytes(buf))
+                    if msg_type == FrameType.CALIBRATION_STATUS and payload:
+                        try:
+                            status = CalibrationStatus.from_bytes(payload)
+                            return {
+                                'position_calibrated': status.position_calibrated,
+                                'motor_characterized': status.motor_characterized,
+                                'nvs_available': status.nvs_available,
+                                'motor1_stall_detected': status.motor1_stall_detected,
+                                'motor2_stall_detected': status.motor2_stall_detected,
+                                'error_code': status.error_code,
+                            }
+                        except Exception:
+                            return None
+            time.sleep(0.05)
+        return None
 
     # ── Recepción y telemetría ─────────────────────────
     def set_telemetry_callback(self, cb: Callable[[TelemetryFrame], None]):

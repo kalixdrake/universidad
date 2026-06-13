@@ -1,6 +1,6 @@
 """
 Ventana principal de la aplicación Robot 2R.
-Gestiona el flujo completo: conexión → configuración → cálculo → ejecución → monitoreo.
+Gestiona el flujo completo: conexión → calibración → configuración → cálculo → ejecución → monitoreo.
 """
 import customtkinter as ctk
 import logging
@@ -8,6 +8,7 @@ import logging
 from .connection_dialog import ConnectionDialog
 from .config_panel import ConfigPanel
 from .trajectory_view import TrajectoryView
+from .calibration_wizard import CalibrationWizard
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,9 @@ class MainWindow(ctk.CTk):
         self.tabview.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
         self.tab_connect = self.tabview.add("1. Conexión")
-        self.tab_config = self.tabview.add("2. Configuración")
-        self.tab_monitor = self.tabview.add("3. Monitoreo")
+        self.tab_calibrate = self.tabview.add("2. Calibración")
+        self.tab_config = self.tabview.add("3. Configuración")
+        self.tab_monitor = self.tabview.add("4. Monitoreo")
 
         # Deshabilitar tabs hasta completar pasos
         self.tabview.set("1. Conexión")
@@ -51,14 +53,21 @@ class MainWindow(ctk.CTk):
         )
         self.connection_dialog.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # ── Tab 2: Configuración (siempre visible) ────
+        # ── Tab 2: Calibración ────────────────────────
+        self.calibration_wizard = CalibrationWizard(
+            self.tab_calibrate,
+            on_calibration_complete=self._on_calibration_complete,
+        )
+        self.calibration_wizard.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # ── Tab 3: Configuración ──────────────────────
         self.config_panel = ConfigPanel(
             self.tab_config,
             on_calculate=self._on_calculate,
         )
         self.config_panel.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # ── Tab 3: Monitoreo ──────────────────────────
+        # ── Tab 4: Monitoreo ──────────────────────────
         self.trajectory_view = TrajectoryView(
             self.tab_monitor,
             on_send=self._on_send_trajectory,
@@ -84,7 +93,11 @@ class MainWindow(ctk.CTk):
         mode = "USB" if info.state.value == "usb" else "Red WiFi"
         self.status_var.set(f"Conectado por {mode} a ESP32 | Puerto: {info.port or info.address}")
         self.trajectory_view.set_connected(True)
-        self.tabview.set("2. Configuración")
+
+        # Pasar el gestor de comunicación al wizard de calibración
+        self.calibration_wizard.set_comm_manager(comm_mgr)
+
+        self.tabview.set("2. Calibración")
 
     def _on_calculate(self, trajectory: dict):
         """Callback cuando se presiona 'Calcular' en el panel de configuración."""
@@ -95,8 +108,15 @@ class MainWindow(ctk.CTk):
         )
         # Pasar datos a la vista de monitoreo
         self.trajectory_view.set_reference_trajectory(trajectory)
-        self.tabview.set("3. Monitoreo")
+        self.tabview.set("4. Monitoreo")
         self._update_tab_state()
+
+    def _on_calibration_complete(self, calibration_data):
+        """Callback cuando se completa la calibración."""
+        self.status_var.set(
+            "✅ Calibración completada. Robot listo para operar."
+        )
+        self.tabview.set("3. Configuración")
 
     def _on_send_trajectory(self):
         """Envía la trayectoria calculada a la ESP32."""
