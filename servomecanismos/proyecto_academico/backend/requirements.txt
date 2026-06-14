@@ -1,17 +1,6 @@
-# Robot 2R — Backend de trayectorias y comunicación
-# ===================================================
-
-# === GUI ===
+# Requisitos para el control del Robot 2R en la PC
 customtkinter>=5.2.0
-
-# === Cálculo científico (port de MATLAB) ===
 numpy>=1.24.0
 scipy>=1.10.0
-matplotlib>=3.7.0
-
-# === Comunicación serie (fallback si rust_comm no está compilado) ===
 pyserial>=3.5
-
-# === Compilación del módulo Rust (PyO3) ===
-maturin>=1.4.0
-
+matplotlib>=3.7.0
