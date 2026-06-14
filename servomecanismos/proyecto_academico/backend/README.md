@@ -14,6 +14,11 @@ Para ejecutar este software, el computador necesita:
    - `pyserial`: Para comunicarse por puerto serie (USB) con la ESP32.
    - `matplotlib`: Para previsualizar las trayectorias calculadas en la PC.
 
+3. **Herramientas de Rust (en la PC)**:
+   - **Maturin**: `pip install maturin` (herramienta de Python para compilar módulos de Rust como extensiones nativas binarias para Python).
+   - **Rustup & Cargo**: La cadena de herramientas de Rust, requerida si deseas compilar la biblioteca nativa y optimizada de comunicación `rust_comm` para la PC.
+   - **espflash**: `cargo install espflash` (herramienta CLI de Rust para interactuar, programar/flashear y monitorear dispositivos ESP32 por línea de comandos).
+
 ---
 
 ## Preparación del Entorno (Linux / macOS / Windows)
